@@ -1,0 +1,366 @@
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+
+import '../../core/notifications/notification_service.dart';
+import '../../core/theme/app_colors.dart';
+import '../../providers/database_provider.dart';
+import '../../providers/settings_provider.dart';
+import '../log_entry/log_entry_sheet.dart';
+import 'widgets/current_hour_card.dart';
+import 'widgets/daily_intention_card.dart';
+import 'widgets/daily_pie_chart_card.dart';
+import 'widgets/time_gradient_background.dart';
+import 'widgets/weekly_insight_card.dart';
+
+class DashboardScreen extends ConsumerStatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen>
+    with WidgetsBindingObserver {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _onResume();
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _onResume();
+    if (state == AppLifecycleState.paused) _onPause();
+  }
+
+  Future<void> _onResume() async {
+    ref.read(settingsNotifierProvider.notifier).incrementAppOpenCount();
+
+    final notifService = ref.read(notificationServiceProvider);
+    await notifService.cancelInactivityCheck();
+
+    final db = ref.read(appDatabaseProvider);
+    final settings = await db.getSettings();
+
+    // Auto-detect sleep: if the app was away for 7+ hours, fill it as Sleep.
+    if (!settings.sleepModeActive) {
+      final prefs = await SharedPreferences.getInstance();
+      final lastMs = prefs.getInt('lastForegroundAt');
+      if (lastMs != null) {
+        final lastForeground = DateTime.fromMillisecondsSinceEpoch(lastMs);
+        if (DateTime.now().difference(lastForeground).inHours >= 7) {
+          final sleepCat = await db.categoriesDao.findByName('Sleep');
+          await db.logEntriesDao.insertRetroactive(
+            startTime: lastForeground,
+            endTime: DateTime.now(),
+            categoryId: sleepCat?.id,
+            description: 'Sleep (auto-detected)',
+          );
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+              content: Text('Sleep logged automatically while you were away.'),
+              duration: Duration(seconds: 4),
+            ));
+          }
+        }
+      }
+      await prefs.setInt(
+          'lastForegroundAt', DateTime.now().millisecondsSinceEpoch);
+    }
+
+    if (!settings.sleepModeActive) {
+      final mode = settings.reminderMode;
+      if (mode == 'custom' || mode == 'strict') {
+        await notifService.scheduleCustomInterval(
+          intervalMinutes: settings.strictIntervalMinutes,
+        );
+      } else {
+        await notifService.scheduleHourly();
+      }
+      // B10: always (re-)schedule Sunday reflection after cancelAll()
+      await notifService.scheduleWeeklyReflection();
+    }
+
+    // B8: show morning intention prompt if not yet set today
+    await _checkMorningPrompt();
+  }
+
+  Future<void> _checkMorningPrompt() async {
+    final prefs = await SharedPreferences.getInstance();
+    final today = DateTime.now();
+    final todayKey =
+        'intentionPrompt_${today.year}_${today.month}_${today.day}';
+    if (prefs.getBool(todayKey) == true) return;
+    await prefs.setBool(todayKey, true);
+
+    final db = ref.read(appDatabaseProvider);
+    final existing = await db.intentionsDao.getForDate(today);
+    if (existing != null && existing.intention.isNotEmpty) return;
+
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (_) => _IntentionPromptDialog(
+        onSet: (text) =>
+            db.intentionsDao.upsertForDate(today, text),
+      ),
+    );
+  }
+
+  Future<void> _onPause() async {
+    final settings = await ref.read(appDatabaseProvider).getSettings();
+    if (!settings.sleepModeActive) {
+      await ref.read(notificationServiceProvider).scheduleInactivityCheck();
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    ref.listen(notificationTapStreamProvider, (_, next) {
+      next.whenData((payload) {
+        if (!mounted) return;
+        if (payload == kNotifPayloadLogEntry) {
+          _openLogSheet();
+        } else if (payload == kNotifPayloadWeeklyReflection ||
+            payload == kNotifPayloadMorningIntention) {
+          context.push('/debrief');
+        }
+      });
+    });
+
+    SystemChrome.setSystemUIOverlayStyle(const SystemUiOverlayStyle(
+      statusBarColor: Colors.transparent,
+      statusBarIconBrightness: Brightness.light,
+    ));
+
+    return Scaffold(
+      backgroundColor: Colors.transparent,
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        scrolledUnderElevation: 0,
+        title: GestureDetector(
+          onTap: () => context.push('/about'),
+          child: const Text(
+            'ChronoPlan',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w700,
+              fontSize: 20,
+              letterSpacing: 0.3,
+            ),
+          ),
+        ),
+        centerTitle: true,
+        actions: [
+          IconButton(
+            icon: const Icon(Icons.person_outline_rounded,
+                color: Colors.white),
+            tooltip: 'Profile',
+            onPressed: () => context.push('/profile'),
+          ),
+        ],
+      ),
+      body: TimeGradientBackground(
+        child: SafeArea(
+          child: ListView(
+            padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+            children: [
+              const CurrentHourCard(),
+              const SizedBox(height: 12),
+              const DailyIntentionCard(),
+              const SizedBox(height: 12),
+              const DailyPieChartCard(),
+              const SizedBox(height: 12),
+              const WeeklyInsightCard(),
+              const SizedBox(height: 12),
+              _DebriefCard(onTap: () => context.push('/debrief')),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _openLogSheet() {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => const LogEntrySheet(),
+    );
+  }
+}
+
+// ── Morning intention prompt dialog ──────────────────────────────────────────
+
+class _IntentionPromptDialog extends StatefulWidget {
+  final Future<void> Function(String) onSet;
+  const _IntentionPromptDialog({required this.onSet});
+
+  @override
+  State<_IntentionPromptDialog> createState() => _IntentionPromptDialogState();
+}
+
+class _IntentionPromptDialogState extends State<_IntentionPromptDialog> {
+  final _ctrl = TextEditingController();
+  bool _saving = false;
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final text = _ctrl.text.trim();
+    if (text.isEmpty) {
+      Navigator.of(context).pop();
+      return;
+    }
+    setState(() => _saving = true);
+    await widget.onSet(text);
+    if (mounted) Navigator.of(context).pop();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: const Color(0xFF1E1E2E),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      title: const Text(
+        "Good morning! 🌅",
+        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+      ),
+      content: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            "What's the one thing that would make today a win?",
+            style: TextStyle(color: Colors.white70, fontSize: 14),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _ctrl,
+            autofocus: true,
+            style: const TextStyle(color: Colors.white),
+            decoration: InputDecoration(
+              hintText: 'e.g. Finish the report draft…',
+              hintStyle: const TextStyle(color: Colors.white38),
+              filled: true,
+              fillColor: Colors.white.withValues(alpha: 0.07),
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(12),
+                borderSide: BorderSide.none,
+              ),
+            ),
+            onSubmitted: (_) => _save(),
+            textCapitalization: TextCapitalization.sentences,
+          ),
+        ],
+      ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.of(context).pop(),
+          child:
+              const Text('Skip', style: TextStyle(color: Colors.white38)),
+        ),
+        FilledButton(
+          onPressed: _saving ? null : _save,
+          style: FilledButton.styleFrom(
+            backgroundColor: AppColors.accentForHour(DateTime.now().hour),
+            shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(10)),
+          ),
+          child: _saving
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(
+                      color: Colors.white, strokeWidth: 2))
+              : const Text('Set intention'),
+        ),
+      ],
+    );
+  }
+}
+
+/// Provider that exposes the notification tap stream to the widget tree.
+final notificationTapStreamProvider = StreamProvider<String>((ref) {
+  return ref.watch(notificationServiceProvider).tapStream;
+});
+
+// ── Debrief entry card ────────────────────────────────────────────────────────
+
+class _DebriefCard extends StatelessWidget {
+  final VoidCallback onTap;
+  const _DebriefCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: AppColors.accentForHour(DateTime.now().hour)
+                    .withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(
+                Icons.auto_awesome_rounded,
+                color: AppColors.accentForHour(DateTime.now().hour),
+                size: 22,
+              ),
+            ),
+            const SizedBox(width: 14),
+            const Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Debrief with AI',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  SizedBox(height: 2),
+                  Text(
+                    'Review your day with your AI coach',
+                    style: TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.white30, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
