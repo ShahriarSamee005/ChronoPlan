@@ -47,9 +47,6 @@ class SettingsScreen extends ConsumerWidget {
                 const SizedBox(height: 24),
                 _SectionLabel('Notifications'),
                 _NotifCard(settings: settings),
-                const SizedBox(height: 24),
-                _SectionLabel('Sleep Mode'),
-                _SleepCard(settings: settings),
               ],
             ),
             loading: () =>
@@ -356,55 +353,3 @@ class _NotifCardState extends ConsumerState<_NotifCard> {
   }
 }
 
-// ── Sleep mode card ───────────────────────────────────────────────────────────
-
-class _SleepCard extends ConsumerWidget {
-  final UserSetting settings;
-  const _SleepCard({required this.settings});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    String subtitle = 'Pauses all reminders until you wake up.';
-    if (settings.sleepModeActive && settings.sleepModeStartedAt != null) {
-      final elapsed = DateTime.now().difference(settings.sleepModeStartedAt!);
-      final h = elapsed.inHours;
-      final m = elapsed.inMinutes % 60;
-      subtitle = h > 0
-          ? 'Sleeping for ${h}h ${m}m'
-          : 'Sleeping for ${m}m';
-    }
-
-    return GlassCard(
-      opacity: 0.10,
-      child: SwitchListTile.adaptive(
-        value: settings.sleepModeActive,
-        onChanged: (v) =>
-            ref.read(settingsNotifierProvider.notifier).setSleepMode(active: v),
-        title: const Text(
-          'Sleep mode',
-          style: TextStyle(color: Colors.white, fontWeight: FontWeight.w600),
-        ),
-        subtitle: Text(
-          subtitle,
-          style: const TextStyle(color: AppColors.textMuted, fontSize: 12),
-        ),
-        secondary: AnimatedSwitcher(
-          duration: const Duration(milliseconds: 350),
-          transitionBuilder: (child, anim) => ScaleTransition(
-            scale: anim,
-            child: FadeTransition(opacity: anim, child: child),
-          ),
-          child: Icon(
-            settings.sleepModeActive
-                ? Icons.bedtime_rounded
-                : Icons.wb_sunny_outlined,
-            key: ValueKey(settings.sleepModeActive),
-            color: settings.sleepModeActive
-                ? AppColors.accentForHour(2)
-                : AppColors.textMuted,
-          ),
-        ),
-      ),
-    );
-  }
-}

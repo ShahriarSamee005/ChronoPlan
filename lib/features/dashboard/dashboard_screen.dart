@@ -52,32 +52,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     final db = ref.read(appDatabaseProvider);
     final settings = await db.getSettings();
 
-    // Auto-detect sleep: if the app was away for 7+ hours, fill it as Sleep.
-    if (!settings.sleepModeActive) {
-      final prefs = await SharedPreferences.getInstance();
-      final lastMs = prefs.getInt('lastForegroundAt');
-      if (lastMs != null) {
-        final lastForeground = DateTime.fromMillisecondsSinceEpoch(lastMs);
-        if (DateTime.now().difference(lastForeground).inHours >= 7) {
-          final sleepCat = await db.categoriesDao.findByName('Sleep');
-          await db.logEntriesDao.insertRetroactive(
-            startTime: lastForeground,
-            endTime: DateTime.now(),
-            categoryId: sleepCat?.id,
-            description: 'Sleep (auto-detected)',
-          );
-          if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
-              content: Text('Sleep logged automatically while you were away.'),
-              duration: Duration(seconds: 4),
-            ));
-          }
-        }
-      }
-      await prefs.setInt(
-          'lastForegroundAt', DateTime.now().millisecondsSinceEpoch);
-    }
-
     if (!settings.sleepModeActive) {
       final mode = settings.reminderMode;
       if (mode == 'custom' || mode == 'strict') {
