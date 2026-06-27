@@ -13,7 +13,7 @@ import '../../providers/database_provider.dart';
 import '../../providers/intentions_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
-import '../../core/ai/claude_service.dart';
+import '../../core/ai/groq_service.dart';
 import '../../providers/settings_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 
@@ -106,18 +106,7 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
     if (_contextLoaded) return;
     _contextLoaded = true;
 
-    final service = ref.read(claudeServiceProvider);
-    if (service == null) {
-      if (!mounted) return;
-      setState(() {
-        _messages.add({
-          'role': 'assistant',
-          'content':
-              'Set up your Claude API key in Settings → Profile to enable AI coaching.',
-        });
-      });
-      return;
-    }
+    final service = ref.read(aiServiceProvider);
 
     const openingMsg =
         'Please give me a concise end-of-day debrief based on today\'s data.';
@@ -132,8 +121,8 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
   }
 
   void _sendMessage(String text, String contextPrompt) {
-    final service = ref.read(claudeServiceProvider);
-    if (service == null || _isStreaming || text.trim().isEmpty) return;
+    final service = ref.read(aiServiceProvider);
+    if (_isStreaming || text.trim().isEmpty) return;
 
     _controller.clear();
     if (!mounted) return;
@@ -150,7 +139,7 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
   void _doStream(
     List<Map<String, String>> messages,
     String contextPrompt,
-    ClaudeService service,
+    GroqService service,
   ) {
     final buf = StringBuffer();
 

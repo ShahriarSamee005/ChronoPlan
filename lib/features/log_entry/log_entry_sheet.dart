@@ -5,7 +5,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
-import '../../core/ai/claude_service.dart';
+import '../../core/ai/groq_service.dart';
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/glass_card.dart';
@@ -408,8 +408,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   }
 
   Future<void> _fetchCategorySuggestion() async {
-    final service = ref.read(claudeServiceProvider);
-    if (service == null) return;
+    final service = ref.read(aiServiceProvider);
     final cats = ref.read(categoriesProvider).valueOrNull ?? [];
     if (cats.isEmpty) return;
     if (mounted) setState(() => _isSuggesting = true);
@@ -459,7 +458,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   // ── B4: parse from free text ────────────────────────────────────────────────
 
   Future<void> _showParseSheet(List<Category> cats) async {
-    final service = ref.read(claudeServiceProvider);
+    final service = ref.read(aiServiceProvider);
     await showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -544,7 +543,7 @@ class _MissedHoursStrip extends StatelessWidget {
 class _ParseSheet extends ConsumerStatefulWidget {
   final List<Category> cats;
   final DateTime anchorTime;
-  final ClaudeService? service;
+  final GroqService service;
   final VoidCallback onDone;
 
   const _ParseSheet({
@@ -573,18 +572,13 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
   Future<void> _parse() async {
     final text = _ctrl.text.trim();
     if (text.isEmpty) return;
-    if (widget.service == null) {
-      setState(() =>
-          _error = 'Set up your API key in Settings to use AI parsing.');
-      return;
-    }
     setState(() {
       _isParsing = true;
       _error = null;
       _parsed = null;
     });
     final catNames = widget.cats.map((c) => c.name).toList();
-    final result = await widget.service!
+    final result = await widget.service
         .parseLogText(text, widget.anchorTime, catNames);
     if (mounted) {
       setState(() {

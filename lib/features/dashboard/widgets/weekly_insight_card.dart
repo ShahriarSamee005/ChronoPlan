@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
@@ -34,8 +35,7 @@ class _WeeklyInsightCardState extends ConsumerState<WeeklyInsightCard> {
 
   Future<void> _load() async {
     if (_isLoading) return;
-    final service = ref.read(claudeServiceProvider);
-    if (service == null) return;
+    final service = ref.read(aiServiceProvider);
 
     setState(() {
       _isLoading = true;
@@ -97,8 +97,10 @@ class _WeeklyInsightCardState extends ConsumerState<WeeklyInsightCard> {
 
   @override
   Widget build(BuildContext context) {
-    final service = ref.watch(claudeServiceProvider);
-    if (service == null) return const SizedBox.shrink();
+    ref.watch(aiServiceProvider); // rebuild when persona changes
+    if (Supabase.instance.client.auth.currentSession == null) {
+      return const SizedBox.shrink();
+    }
 
     final accent = AppColors.accentForHour(DateTime.now().hour);
 

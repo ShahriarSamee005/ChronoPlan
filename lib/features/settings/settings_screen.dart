@@ -41,9 +41,18 @@ class SettingsScreen extends ConsumerWidget {
               padding: const EdgeInsets.fromLTRB(16, 12, 16, 48),
               children: [
                 _SectionLabel('AI Assistant'),
-                const _ApiKeyCard(),
-                const SizedBox(height: 12),
                 _PersonaCard(current: settings.aiPersona),
+                const SizedBox(height: 8),
+                const Padding(
+                  padding: EdgeInsets.only(left: 4),
+                  child: Text(
+                    'AI is powered by Groq, included with ChronoPlan.',
+                    style: TextStyle(
+                      color: AppColors.textMuted,
+                      fontSize: 12,
+                    ),
+                  ),
+                ),
                 const SizedBox(height: 24),
                 _SectionLabel('Notifications'),
                 _NotifCard(settings: settings),
@@ -81,125 +90,6 @@ class _SectionLabel extends StatelessWidget {
           ),
         ),
       );
-}
-
-// ── API key card ──────────────────────────────────────────────────────────────
-
-class _ApiKeyCard extends ConsumerStatefulWidget {
-  const _ApiKeyCard();
-
-  @override
-  ConsumerState<_ApiKeyCard> createState() => _ApiKeyCardState();
-}
-
-class _ApiKeyCardState extends ConsumerState<_ApiKeyCard> {
-  final _ctrl = TextEditingController();
-  bool _obscure = true;
-  bool _dirty = false;
-
-  @override
-  void initState() {
-    super.initState();
-    ref.read(claudeApiKeyProvider.future).then((key) {
-      if (mounted && key != null && key.isNotEmpty) {
-        _ctrl.text = key;
-      }
-    });
-    _ctrl.addListener(() => setState(() => _dirty = true));
-  }
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return GlassCard(
-      padding: const EdgeInsets.fromLTRB(16, 16, 16, 16),
-      opacity: 0.10,
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            'Claude API Key',
-            style: TextStyle(
-              color: AppColors.textSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-          const SizedBox(height: 8),
-          TextField(
-            controller: _ctrl,
-            obscureText: _obscure,
-            style: const TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontFamily: 'monospace',
-            ),
-            decoration: InputDecoration(
-              hintText: 'sk-ant-…',
-              suffixIcon: IconButton(
-                icon: Icon(
-                  _obscure
-                      ? Icons.visibility_outlined
-                      : Icons.visibility_off_outlined,
-                  color: AppColors.textMuted,
-                  size: 18,
-                ),
-                onPressed: () => setState(() => _obscure = !_obscure),
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton(
-                  onPressed: _dirty ? _save : null,
-                  child: const Text('Save key'),
-                ),
-              ),
-              const SizedBox(width: 8),
-              OutlinedButton(
-                onPressed: _clear,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.redAccent,
-                  side: const BorderSide(color: Colors.redAccent, width: 1),
-                ),
-                child: const Text('Clear'),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _save() async {
-    final key = _ctrl.text.trim();
-    if (key.isEmpty) return;
-    await ref.read(apiKeyNotifierProvider.notifier).saveKey(key);
-    setState(() => _dirty = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API key saved')),
-      );
-    }
-  }
-
-  Future<void> _clear() async {
-    await ref.read(apiKeyNotifierProvider.notifier).clearKey();
-    _ctrl.clear();
-    setState(() => _dirty = false);
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('API key cleared')),
-      );
-    }
-  }
 }
 
 // ── Persona card ──────────────────────────────────────────────────────────────
