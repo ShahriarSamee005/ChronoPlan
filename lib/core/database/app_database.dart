@@ -7,11 +7,13 @@ import 'package:path_provider/path_provider.dart';
 
 import 'tables/categories_table.dart';
 import 'tables/daily_intentions_table.dart';
+import 'tables/dismissed_carves_table.dart';
 import 'tables/dismissed_suggestions_table.dart';
 import 'tables/log_entries_table.dart';
 import 'tables/routine_slots_table.dart';
 import 'tables/user_settings_table.dart';
 import 'daos/categories_dao.dart';
+import 'daos/dismissed_carves_dao.dart';
 import 'daos/dismissed_suggestions_dao.dart';
 import 'daos/intentions_dao.dart';
 import 'daos/log_entries_dao.dart';
@@ -27,9 +29,11 @@ part 'app_database.g.dart';
     DailyIntentions,
     UserSettings,
     DismissedSuggestions,
+    DismissedCarves,
   ],
   daos: [
     CategoriesDao,
+    DismissedCarvesDao,
     DismissedSuggestionsDao,
     LogEntriesDao,
     RoutineSlotsDao,
@@ -40,7 +44,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 4;
+  int get schemaVersion => 5;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -74,8 +78,12 @@ class AppDatabase extends _$AppDatabase {
             }
           }
           if (from < 4) {
-            // Add the dismissed_suggestions table for Phase 2 usage suggestions.
+            // Add the dismissed_suggestions table for Phase 2a usage suggestions.
             await m.createTable(dismissedSuggestions);
+          }
+          if (from < 5) {
+            // Add the dismissed_carves table for Phase 2b carve-proposal dismissals.
+            await m.createTable(dismissedCarves);
           }
         },
       );

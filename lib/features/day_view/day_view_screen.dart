@@ -5,11 +5,13 @@ import 'package:intl/intl.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/glass_card.dart';
+import '../../providers/carve_proposals_provider.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../log_entry/log_entry_sheet.dart';
+import 'widgets/entry_with_carves.dart';
 
 class DayViewScreen extends ConsumerStatefulWidget {
   final DateTime? initialDate;
@@ -72,6 +74,11 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         .where((s) => s.dayOfWeek == dayOfWeek || s.dayOfWeek == 0)
         .toList();
 
+    // Carve proposals are today-only — no historical usage data is available.
+    final carveProposals = _isToday
+        ? (ref.watch(carveProposalsProvider).valueOrNull ?? <CarveProposal>[])
+        : <CarveProposal>[];
+
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
@@ -110,6 +117,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
               entries: entries,
               cats: catsAsync.valueOrNull ?? [],
               routineSlots: todaySlots,
+              carveProposals: carveProposals,
               isToday: _isToday,
               scrollCtrl: _scrollCtrl,
               hourPx: _hourPx,
@@ -194,6 +202,7 @@ class _Timeline extends StatelessWidget {
   final List<LogEntry> entries;
   final List<Category> cats;
   final List<RoutineSlot> routineSlots;
+  final List<CarveProposal> carveProposals;
   final bool isToday;
   final ScrollController scrollCtrl;
   final double hourPx;
@@ -204,6 +213,7 @@ class _Timeline extends StatelessWidget {
     required this.entries,
     required this.cats,
     required this.routineSlots,
+    required this.carveProposals,
     required this.isToday,
     required this.scrollCtrl,
     required this.hourPx,
@@ -271,8 +281,15 @@ class _Timeline extends StatelessWidget {
                   )),
                   // Routine ghost blocks (behind real entries)
                   ...routineSlots.map((s) => _ghostBlock(s)),
-                  // Entry blocks
-                  ...entries.map((entry) => _entryBlock(entry)),
+                  // Entry blocks — rendered with pending carve proposals when present.
+                  ...entries.map((entry) {
+                    final proposals = carveProposals
+                        .where((p) => p.loggedEntry.id == entry.id)
+                        .toList();
+                    return proposals.isNotEmpty
+                        ? _entryBlockWithCarves(entry, proposals)
+                        : _entryBlock(entry);
+                  }),
                   // Current time indicator
                   if (nowMinute >= 0)
                     Positioned(
@@ -335,6 +352,34 @@ class _Timeline extends StatelessWidget {
           eStart < slotEnd &&
           eEnd > slotStart;
     });
+  }
+
+  /// Entry block that renders the logged entry split side-by-side with its
+  /// pending carve proposals.  Falls back to a plain [_entryBlock] when the
+  /// pixel height is too small to fit the carve UI (< 50 px).
+  Widget _entryBlockWithCarves(
+      LogEntry entry, List<CarveProposal> proposals) {
+    final startMin = entry.startTime.hour * 60 + entry.startTime.minute;
+    final endMin = (entry.endTime.hour * 60 + entry.endTime.minute)
+        .clamp(startMin + 1, 1440);
+    final top = startMin * hourPx / 60;
+    final height =
+        ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
+
+    if (height < 50) return _entryBlock(entry);
+
+    return Positioned(
+      top: top + 1,
+      left: 2,
+      right: 2,
+      height: height,
+      child: EntryWithCarves(
+        entry: entry,
+        proposals: proposals,
+        cats: cats,
+        onEntryTap: () => onEntryTap(entry),
+      ),
+    );
   }
 
   Widget _ghostBlock(RoutineSlot slot) {

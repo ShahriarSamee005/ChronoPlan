@@ -42,6 +42,9 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
             ..orderBy([(e) => OrderingTerm(expression: e.startTime)]))
           .get();
 
+  Future<LogEntry?> getById(int id) =>
+      (select(logEntries)..where((e) => e.id.equals(id))).getSingleOrNull();
+
   Future<List<LogEntry>> getForWeek(DateTime weekStart) {
     final end = weekStart.add(const Duration(days: 7));
     return (select(logEntries)

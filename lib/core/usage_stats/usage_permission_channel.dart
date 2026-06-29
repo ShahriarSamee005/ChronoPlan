@@ -8,7 +8,7 @@ import 'package:flutter/services.dart';
 ///   2. Open the system Usage Access settings screen.
 ///
 /// Usage data itself does NOT flow through this channel — that comes from
-/// the app_usage package directly.
+/// the com.example.chronoplan/usage_stats channel in UsageStatsService.
 class UsagePermissionChannel {
   static const _ch =
       MethodChannel('com.example.chronoplan/usage_permission');

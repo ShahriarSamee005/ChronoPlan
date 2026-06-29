@@ -2798,6 +2798,281 @@ class DismissedSuggestionsCompanion
   }
 }
 
+class $DismissedCarvesTable extends DismissedCarves
+    with TableInfo<$DismissedCarvesTable, DismissedCarve> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DismissedCarvesTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _bucketDateMeta =
+      const VerificationMeta('bucketDate');
+  @override
+  late final GeneratedColumn<DateTime> bucketDate = GeneratedColumn<DateTime>(
+      'bucket_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _bucketHourMeta =
+      const VerificationMeta('bucketHour');
+  @override
+  late final GeneratedColumn<int> bucketHour = GeneratedColumn<int>(
+      'bucket_hour', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _packageNameMeta =
+      const VerificationMeta('packageName');
+  @override
+  late final GeneratedColumn<String> packageName = GeneratedColumn<String>(
+      'package_name', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, bucketDate, bucketHour, packageName];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dismissed_carves';
+  @override
+  VerificationContext validateIntegrity(Insertable<DismissedCarve> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bucket_date')) {
+      context.handle(
+          _bucketDateMeta,
+          bucketDate.isAcceptableOrUnknown(
+              data['bucket_date']!, _bucketDateMeta));
+    } else if (isInserting) {
+      context.missing(_bucketDateMeta);
+    }
+    if (data.containsKey('bucket_hour')) {
+      context.handle(
+          _bucketHourMeta,
+          bucketHour.isAcceptableOrUnknown(
+              data['bucket_hour']!, _bucketHourMeta));
+    } else if (isInserting) {
+      context.missing(_bucketHourMeta);
+    }
+    if (data.containsKey('package_name')) {
+      context.handle(
+          _packageNameMeta,
+          packageName.isAcceptableOrUnknown(
+              data['package_name']!, _packageNameMeta));
+    } else if (isInserting) {
+      context.missing(_packageNameMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+        {bucketDate, bucketHour, packageName},
+      ];
+  @override
+  DismissedCarve map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DismissedCarve(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      bucketDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}bucket_date'])!,
+      bucketHour: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}bucket_hour'])!,
+      packageName: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}package_name'])!,
+    );
+  }
+
+  @override
+  $DismissedCarvesTable createAlias(String alias) {
+    return $DismissedCarvesTable(attachedDatabase, alias);
+  }
+}
+
+class DismissedCarve extends DataClass implements Insertable<DismissedCarve> {
+  final int id;
+  final DateTime bucketDate;
+  final int bucketHour;
+  final String packageName;
+  const DismissedCarve(
+      {required this.id,
+      required this.bucketDate,
+      required this.bucketHour,
+      required this.packageName});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bucket_date'] = Variable<DateTime>(bucketDate);
+    map['bucket_hour'] = Variable<int>(bucketHour);
+    map['package_name'] = Variable<String>(packageName);
+    return map;
+  }
+
+  DismissedCarvesCompanion toCompanion(bool nullToAbsent) {
+    return DismissedCarvesCompanion(
+      id: Value(id),
+      bucketDate: Value(bucketDate),
+      bucketHour: Value(bucketHour),
+      packageName: Value(packageName),
+    );
+  }
+
+  factory DismissedCarve.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DismissedCarve(
+      id: serializer.fromJson<int>(json['id']),
+      bucketDate: serializer.fromJson<DateTime>(json['bucketDate']),
+      bucketHour: serializer.fromJson<int>(json['bucketHour']),
+      packageName: serializer.fromJson<String>(json['packageName']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bucketDate': serializer.toJson<DateTime>(bucketDate),
+      'bucketHour': serializer.toJson<int>(bucketHour),
+      'packageName': serializer.toJson<String>(packageName),
+    };
+  }
+
+  DismissedCarve copyWith(
+          {int? id,
+          DateTime? bucketDate,
+          int? bucketHour,
+          String? packageName}) =>
+      DismissedCarve(
+        id: id ?? this.id,
+        bucketDate: bucketDate ?? this.bucketDate,
+        bucketHour: bucketHour ?? this.bucketHour,
+        packageName: packageName ?? this.packageName,
+      );
+  DismissedCarve copyWithCompanion(DismissedCarvesCompanion data) {
+    return DismissedCarve(
+      id: data.id.present ? data.id.value : this.id,
+      bucketDate:
+          data.bucketDate.present ? data.bucketDate.value : this.bucketDate,
+      bucketHour:
+          data.bucketHour.present ? data.bucketHour.value : this.bucketHour,
+      packageName:
+          data.packageName.present ? data.packageName.value : this.packageName,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DismissedCarve(')
+          ..write('id: $id, ')
+          ..write('bucketDate: $bucketDate, ')
+          ..write('bucketHour: $bucketHour, ')
+          ..write('packageName: $packageName')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, bucketDate, bucketHour, packageName);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DismissedCarve &&
+          other.id == this.id &&
+          other.bucketDate == this.bucketDate &&
+          other.bucketHour == this.bucketHour &&
+          other.packageName == this.packageName);
+}
+
+class DismissedCarvesCompanion extends UpdateCompanion<DismissedCarve> {
+  final Value<int> id;
+  final Value<DateTime> bucketDate;
+  final Value<int> bucketHour;
+  final Value<String> packageName;
+  const DismissedCarvesCompanion({
+    this.id = const Value.absent(),
+    this.bucketDate = const Value.absent(),
+    this.bucketHour = const Value.absent(),
+    this.packageName = const Value.absent(),
+  });
+  DismissedCarvesCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime bucketDate,
+    required int bucketHour,
+    required String packageName,
+  })  : bucketDate = Value(bucketDate),
+        bucketHour = Value(bucketHour),
+        packageName = Value(packageName);
+  static Insertable<DismissedCarve> custom({
+    Expression<int>? id,
+    Expression<DateTime>? bucketDate,
+    Expression<int>? bucketHour,
+    Expression<String>? packageName,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bucketDate != null) 'bucket_date': bucketDate,
+      if (bucketHour != null) 'bucket_hour': bucketHour,
+      if (packageName != null) 'package_name': packageName,
+    });
+  }
+
+  DismissedCarvesCompanion copyWith(
+      {Value<int>? id,
+      Value<DateTime>? bucketDate,
+      Value<int>? bucketHour,
+      Value<String>? packageName}) {
+    return DismissedCarvesCompanion(
+      id: id ?? this.id,
+      bucketDate: bucketDate ?? this.bucketDate,
+      bucketHour: bucketHour ?? this.bucketHour,
+      packageName: packageName ?? this.packageName,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bucketDate.present) {
+      map['bucket_date'] = Variable<DateTime>(bucketDate.value);
+    }
+    if (bucketHour.present) {
+      map['bucket_hour'] = Variable<int>(bucketHour.value);
+    }
+    if (packageName.present) {
+      map['package_name'] = Variable<String>(packageName.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DismissedCarvesCompanion(')
+          ..write('id: $id, ')
+          ..write('bucketDate: $bucketDate, ')
+          ..write('bucketHour: $bucketHour, ')
+          ..write('packageName: $packageName')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2809,7 +3084,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $UserSettingsTable userSettings = $UserSettingsTable(this);
   late final $DismissedSuggestionsTable dismissedSuggestions =
       $DismissedSuggestionsTable(this);
+  late final $DismissedCarvesTable dismissedCarves =
+      $DismissedCarvesTable(this);
   late final CategoriesDao categoriesDao = CategoriesDao(this as AppDatabase);
+  late final DismissedCarvesDao dismissedCarvesDao =
+      DismissedCarvesDao(this as AppDatabase);
   late final DismissedSuggestionsDao dismissedSuggestionsDao =
       DismissedSuggestionsDao(this as AppDatabase);
   late final LogEntriesDao logEntriesDao = LogEntriesDao(this as AppDatabase);
@@ -2826,7 +3105,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         routineSlots,
         dailyIntentions,
         userSettings,
-        dismissedSuggestions
+        dismissedSuggestions,
+        dismissedCarves
       ];
 }
 
@@ -4176,6 +4456,159 @@ typedef $$DismissedSuggestionsTableProcessedTableManager
         ),
         DismissedSuggestion,
         PrefetchHooks Function()>;
+typedef $$DismissedCarvesTableCreateCompanionBuilder = DismissedCarvesCompanion
+    Function({
+  Value<int> id,
+  required DateTime bucketDate,
+  required int bucketHour,
+  required String packageName,
+});
+typedef $$DismissedCarvesTableUpdateCompanionBuilder = DismissedCarvesCompanion
+    Function({
+  Value<int> id,
+  Value<DateTime> bucketDate,
+  Value<int> bucketHour,
+  Value<String> packageName,
+});
+
+class $$DismissedCarvesTableFilterComposer
+    extends Composer<_$AppDatabase, $DismissedCarvesTable> {
+  $$DismissedCarvesTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get packageName => $composableBuilder(
+      column: $table.packageName, builder: (column) => ColumnFilters(column));
+}
+
+class $$DismissedCarvesTableOrderingComposer
+    extends Composer<_$AppDatabase, $DismissedCarvesTable> {
+  $$DismissedCarvesTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get packageName => $composableBuilder(
+      column: $table.packageName, builder: (column) => ColumnOrderings(column));
+}
+
+class $$DismissedCarvesTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DismissedCarvesTable> {
+  $$DismissedCarvesTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => column);
+
+  GeneratedColumn<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => column);
+
+  GeneratedColumn<String> get packageName => $composableBuilder(
+      column: $table.packageName, builder: (column) => column);
+}
+
+class $$DismissedCarvesTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $DismissedCarvesTable,
+    DismissedCarve,
+    $$DismissedCarvesTableFilterComposer,
+    $$DismissedCarvesTableOrderingComposer,
+    $$DismissedCarvesTableAnnotationComposer,
+    $$DismissedCarvesTableCreateCompanionBuilder,
+    $$DismissedCarvesTableUpdateCompanionBuilder,
+    (
+      DismissedCarve,
+      BaseReferences<_$AppDatabase, $DismissedCarvesTable, DismissedCarve>
+    ),
+    DismissedCarve,
+    PrefetchHooks Function()> {
+  $$DismissedCarvesTableTableManager(
+      _$AppDatabase db, $DismissedCarvesTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DismissedCarvesTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DismissedCarvesTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DismissedCarvesTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> bucketDate = const Value.absent(),
+            Value<int> bucketHour = const Value.absent(),
+            Value<String> packageName = const Value.absent(),
+          }) =>
+              DismissedCarvesCompanion(
+            id: id,
+            bucketDate: bucketDate,
+            bucketHour: bucketHour,
+            packageName: packageName,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime bucketDate,
+            required int bucketHour,
+            required String packageName,
+          }) =>
+              DismissedCarvesCompanion.insert(
+            id: id,
+            bucketDate: bucketDate,
+            bucketHour: bucketHour,
+            packageName: packageName,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$DismissedCarvesTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $DismissedCarvesTable,
+    DismissedCarve,
+    $$DismissedCarvesTableFilterComposer,
+    $$DismissedCarvesTableOrderingComposer,
+    $$DismissedCarvesTableAnnotationComposer,
+    $$DismissedCarvesTableCreateCompanionBuilder,
+    $$DismissedCarvesTableUpdateCompanionBuilder,
+    (
+      DismissedCarve,
+      BaseReferences<_$AppDatabase, $DismissedCarvesTable, DismissedCarve>
+    ),
+    DismissedCarve,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4192,4 +4625,6 @@ class $AppDatabaseManager {
       $$UserSettingsTableTableManager(_db, _db.userSettings);
   $$DismissedSuggestionsTableTableManager get dismissedSuggestions =>
       $$DismissedSuggestionsTableTableManager(_db, _db.dismissedSuggestions);
+  $$DismissedCarvesTableTableManager get dismissedCarves =>
+      $$DismissedCarvesTableTableManager(_db, _db.dismissedCarves);
 }

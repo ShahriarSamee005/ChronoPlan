@@ -37,9 +37,6 @@ dependencies:
   # UI & Typography
   google_fonts: ^6.2.1
 
-  # Android usage stats (Phase 1 – screen-time foundation)
-  app_usage: ^4.1.0
-
   # Utils
   intl: ^0.19.0
   uuid: ^4.4.2
