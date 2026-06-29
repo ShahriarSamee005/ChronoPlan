@@ -13,7 +13,10 @@ import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
 import 'widgets/time_gradient_background.dart';
+import 'widgets/usage_access_card.dart';
+import 'widgets/usage_suggestions_card.dart';
 import 'widgets/weekly_insight_card.dart';
+import '../../providers/usage_stats_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -45,6 +48,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   Future<void> _onResume() async {
     ref.read(settingsNotifierProvider.notifier).incrementAppOpenCount();
+    // Re-check usage permission and refresh usage data on every resume so
+    // permission grants and new usage are reflected without a full restart.
+    ref.invalidate(usagePermissionProvider);
+    ref.invalidate(todayUsageProvider);
+    ref.invalidate(hourlyUsageForTodayProvider);
 
     final notifService = ref.read(notificationServiceProvider);
     await notifService.cancelInactivityCheck();
@@ -158,6 +166,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               const DailyPieChartCard(),
               const SizedBox(height: 12),
               const WeeklyInsightCard(),
+              const SizedBox(height: 12),
+              const UsageAccessCard(),
+              const SizedBox(height: 12),
+              const UsageSuggestionsCard(),
               const SizedBox(height: 12),
               _DebriefCard(onTap: () => context.push('/debrief')),
             ],

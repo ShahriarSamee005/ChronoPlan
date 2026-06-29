@@ -52,6 +52,7 @@ class CategoriesDao extends DatabaseAccessor<AppDatabase>
       ('Personal Care', 0xFF4ECDC4, false),
       ('Travel', 0xFF74B9FF, false),
       ('Admin', 0xFF55EFC4, false),
+      ('Screen Time', 0xFF5E60CE, true), // system: usage-stats-derived entries
     ];
     for (final (name, color, isSystem) in defaults) {
       await into(categories).insert(CategoriesCompanion.insert(

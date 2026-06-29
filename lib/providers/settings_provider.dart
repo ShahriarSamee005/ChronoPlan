@@ -66,6 +66,11 @@ class SettingsNotifier extends AsyncNotifier<void> {
       appOpenCount: Value(current.appOpenCount + 1),
     ));
   }
+
+  Future<void> dismissUsageStatsCard() =>
+      _db.updateSettings(UserSettingsCompanion(
+        usageStatsPermissionAsked: const Value(true),
+      ));
 }
 
 final settingsNotifierProvider =

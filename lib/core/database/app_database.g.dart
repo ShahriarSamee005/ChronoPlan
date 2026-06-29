@@ -2567,6 +2567,237 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
   }
 }
 
+class $DismissedSuggestionsTable extends DismissedSuggestions
+    with TableInfo<$DismissedSuggestionsTable, DismissedSuggestion> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $DismissedSuggestionsTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _bucketDateMeta =
+      const VerificationMeta('bucketDate');
+  @override
+  late final GeneratedColumn<DateTime> bucketDate = GeneratedColumn<DateTime>(
+      'bucket_date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _bucketHourMeta =
+      const VerificationMeta('bucketHour');
+  @override
+  late final GeneratedColumn<int> bucketHour = GeneratedColumn<int>(
+      'bucket_hour', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns => [id, bucketDate, bucketHour];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'dismissed_suggestions';
+  @override
+  VerificationContext validateIntegrity(
+      Insertable<DismissedSuggestion> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('bucket_date')) {
+      context.handle(
+          _bucketDateMeta,
+          bucketDate.isAcceptableOrUnknown(
+              data['bucket_date']!, _bucketDateMeta));
+    } else if (isInserting) {
+      context.missing(_bucketDateMeta);
+    }
+    if (data.containsKey('bucket_hour')) {
+      context.handle(
+          _bucketHourMeta,
+          bucketHour.isAcceptableOrUnknown(
+              data['bucket_hour']!, _bucketHourMeta));
+    } else if (isInserting) {
+      context.missing(_bucketHourMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  List<Set<GeneratedColumn>> get uniqueKeys => [
+        {bucketDate, bucketHour},
+      ];
+  @override
+  DismissedSuggestion map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return DismissedSuggestion(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      bucketDate: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}bucket_date'])!,
+      bucketHour: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}bucket_hour'])!,
+    );
+  }
+
+  @override
+  $DismissedSuggestionsTable createAlias(String alias) {
+    return $DismissedSuggestionsTable(attachedDatabase, alias);
+  }
+}
+
+class DismissedSuggestion extends DataClass
+    implements Insertable<DismissedSuggestion> {
+  final int id;
+  final DateTime bucketDate;
+  final int bucketHour;
+  const DismissedSuggestion(
+      {required this.id, required this.bucketDate, required this.bucketHour});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['bucket_date'] = Variable<DateTime>(bucketDate);
+    map['bucket_hour'] = Variable<int>(bucketHour);
+    return map;
+  }
+
+  DismissedSuggestionsCompanion toCompanion(bool nullToAbsent) {
+    return DismissedSuggestionsCompanion(
+      id: Value(id),
+      bucketDate: Value(bucketDate),
+      bucketHour: Value(bucketHour),
+    );
+  }
+
+  factory DismissedSuggestion.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return DismissedSuggestion(
+      id: serializer.fromJson<int>(json['id']),
+      bucketDate: serializer.fromJson<DateTime>(json['bucketDate']),
+      bucketHour: serializer.fromJson<int>(json['bucketHour']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'bucketDate': serializer.toJson<DateTime>(bucketDate),
+      'bucketHour': serializer.toJson<int>(bucketHour),
+    };
+  }
+
+  DismissedSuggestion copyWith(
+          {int? id, DateTime? bucketDate, int? bucketHour}) =>
+      DismissedSuggestion(
+        id: id ?? this.id,
+        bucketDate: bucketDate ?? this.bucketDate,
+        bucketHour: bucketHour ?? this.bucketHour,
+      );
+  DismissedSuggestion copyWithCompanion(DismissedSuggestionsCompanion data) {
+    return DismissedSuggestion(
+      id: data.id.present ? data.id.value : this.id,
+      bucketDate:
+          data.bucketDate.present ? data.bucketDate.value : this.bucketDate,
+      bucketHour:
+          data.bucketHour.present ? data.bucketHour.value : this.bucketHour,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DismissedSuggestion(')
+          ..write('id: $id, ')
+          ..write('bucketDate: $bucketDate, ')
+          ..write('bucketHour: $bucketHour')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode => Object.hash(id, bucketDate, bucketHour);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is DismissedSuggestion &&
+          other.id == this.id &&
+          other.bucketDate == this.bucketDate &&
+          other.bucketHour == this.bucketHour);
+}
+
+class DismissedSuggestionsCompanion
+    extends UpdateCompanion<DismissedSuggestion> {
+  final Value<int> id;
+  final Value<DateTime> bucketDate;
+  final Value<int> bucketHour;
+  const DismissedSuggestionsCompanion({
+    this.id = const Value.absent(),
+    this.bucketDate = const Value.absent(),
+    this.bucketHour = const Value.absent(),
+  });
+  DismissedSuggestionsCompanion.insert({
+    this.id = const Value.absent(),
+    required DateTime bucketDate,
+    required int bucketHour,
+  })  : bucketDate = Value(bucketDate),
+        bucketHour = Value(bucketHour);
+  static Insertable<DismissedSuggestion> custom({
+    Expression<int>? id,
+    Expression<DateTime>? bucketDate,
+    Expression<int>? bucketHour,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (bucketDate != null) 'bucket_date': bucketDate,
+      if (bucketHour != null) 'bucket_hour': bucketHour,
+    });
+  }
+
+  DismissedSuggestionsCompanion copyWith(
+      {Value<int>? id, Value<DateTime>? bucketDate, Value<int>? bucketHour}) {
+    return DismissedSuggestionsCompanion(
+      id: id ?? this.id,
+      bucketDate: bucketDate ?? this.bucketDate,
+      bucketHour: bucketHour ?? this.bucketHour,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (bucketDate.present) {
+      map['bucket_date'] = Variable<DateTime>(bucketDate.value);
+    }
+    if (bucketHour.present) {
+      map['bucket_hour'] = Variable<int>(bucketHour.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('DismissedSuggestionsCompanion(')
+          ..write('id: $id, ')
+          ..write('bucketDate: $bucketDate, ')
+          ..write('bucketHour: $bucketHour')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -2576,7 +2807,11 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final $DailyIntentionsTable dailyIntentions =
       $DailyIntentionsTable(this);
   late final $UserSettingsTable userSettings = $UserSettingsTable(this);
+  late final $DismissedSuggestionsTable dismissedSuggestions =
+      $DismissedSuggestionsTable(this);
   late final CategoriesDao categoriesDao = CategoriesDao(this as AppDatabase);
+  late final DismissedSuggestionsDao dismissedSuggestionsDao =
+      DismissedSuggestionsDao(this as AppDatabase);
   late final LogEntriesDao logEntriesDao = LogEntriesDao(this as AppDatabase);
   late final RoutineSlotsDao routineSlotsDao =
       RoutineSlotsDao(this as AppDatabase);
@@ -2585,8 +2820,14 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
   @override
-  List<DatabaseSchemaEntity> get allSchemaEntities =>
-      [categories, logEntries, routineSlots, dailyIntentions, userSettings];
+  List<DatabaseSchemaEntity> get allSchemaEntities => [
+        categories,
+        logEntries,
+        routineSlots,
+        dailyIntentions,
+        userSettings,
+        dismissedSuggestions
+      ];
 }
 
 typedef $$CategoriesTableCreateCompanionBuilder = CategoriesCompanion Function({
@@ -3792,6 +4033,149 @@ typedef $$UserSettingsTableProcessedTableManager = ProcessedTableManager<
     ),
     UserSetting,
     PrefetchHooks Function()>;
+typedef $$DismissedSuggestionsTableCreateCompanionBuilder
+    = DismissedSuggestionsCompanion Function({
+  Value<int> id,
+  required DateTime bucketDate,
+  required int bucketHour,
+});
+typedef $$DismissedSuggestionsTableUpdateCompanionBuilder
+    = DismissedSuggestionsCompanion Function({
+  Value<int> id,
+  Value<DateTime> bucketDate,
+  Value<int> bucketHour,
+});
+
+class $$DismissedSuggestionsTableFilterComposer
+    extends Composer<_$AppDatabase, $DismissedSuggestionsTable> {
+  $$DismissedSuggestionsTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => ColumnFilters(column));
+}
+
+class $$DismissedSuggestionsTableOrderingComposer
+    extends Composer<_$AppDatabase, $DismissedSuggestionsTable> {
+  $$DismissedSuggestionsTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => ColumnOrderings(column));
+}
+
+class $$DismissedSuggestionsTableAnnotationComposer
+    extends Composer<_$AppDatabase, $DismissedSuggestionsTable> {
+  $$DismissedSuggestionsTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get bucketDate => $composableBuilder(
+      column: $table.bucketDate, builder: (column) => column);
+
+  GeneratedColumn<int> get bucketHour => $composableBuilder(
+      column: $table.bucketHour, builder: (column) => column);
+}
+
+class $$DismissedSuggestionsTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $DismissedSuggestionsTable,
+    DismissedSuggestion,
+    $$DismissedSuggestionsTableFilterComposer,
+    $$DismissedSuggestionsTableOrderingComposer,
+    $$DismissedSuggestionsTableAnnotationComposer,
+    $$DismissedSuggestionsTableCreateCompanionBuilder,
+    $$DismissedSuggestionsTableUpdateCompanionBuilder,
+    (
+      DismissedSuggestion,
+      BaseReferences<_$AppDatabase, $DismissedSuggestionsTable,
+          DismissedSuggestion>
+    ),
+    DismissedSuggestion,
+    PrefetchHooks Function()> {
+  $$DismissedSuggestionsTableTableManager(
+      _$AppDatabase db, $DismissedSuggestionsTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$DismissedSuggestionsTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$DismissedSuggestionsTableOrderingComposer(
+                  $db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$DismissedSuggestionsTableAnnotationComposer(
+                  $db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<DateTime> bucketDate = const Value.absent(),
+            Value<int> bucketHour = const Value.absent(),
+          }) =>
+              DismissedSuggestionsCompanion(
+            id: id,
+            bucketDate: bucketDate,
+            bucketHour: bucketHour,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required DateTime bucketDate,
+            required int bucketHour,
+          }) =>
+              DismissedSuggestionsCompanion.insert(
+            id: id,
+            bucketDate: bucketDate,
+            bucketHour: bucketHour,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$DismissedSuggestionsTableProcessedTableManager
+    = ProcessedTableManager<
+        _$AppDatabase,
+        $DismissedSuggestionsTable,
+        DismissedSuggestion,
+        $$DismissedSuggestionsTableFilterComposer,
+        $$DismissedSuggestionsTableOrderingComposer,
+        $$DismissedSuggestionsTableAnnotationComposer,
+        $$DismissedSuggestionsTableCreateCompanionBuilder,
+        $$DismissedSuggestionsTableUpdateCompanionBuilder,
+        (
+          DismissedSuggestion,
+          BaseReferences<_$AppDatabase, $DismissedSuggestionsTable,
+              DismissedSuggestion>
+        ),
+        DismissedSuggestion,
+        PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -3806,4 +4190,6 @@ class $AppDatabaseManager {
       $$DailyIntentionsTableTableManager(_db, _db.dailyIntentions);
   $$UserSettingsTableTableManager get userSettings =>
       $$UserSettingsTableTableManager(_db, _db.userSettings);
+  $$DismissedSuggestionsTableTableManager get dismissedSuggestions =>
+      $$DismissedSuggestionsTableTableManager(_db, _db.dismissedSuggestions);
 }
