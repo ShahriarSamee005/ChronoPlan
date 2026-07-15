@@ -2,7 +2,22 @@
   "permissions": {
     "allow": [
       "Bash(./gradlew --stop)",
-      "Bash(flutter pub *)"
+      "Bash(flutter pub *)",
+      "Bash(git add *)",
+      "Bash(git commit -m ' *)",
+      "Bash(git push *)",
+      "PowerShell($pkg = \\(Get-Content \"f:\\\\Flutter_code\\\\Flutter_projects\\\\chronoplan\\\\.dart_tool\\\\package_config.json\" | ConvertFrom-Json\\).packages | Where-Object { $_.name -eq \"app_usage\" }; $pkg.rootUri)",
+      "Read(//c/Users/MARUF/AppData/Local/Pub/Cache/hosted/pub.dev/app_usage-4.1.0/**)",
+      "Bash(dart run *)",
+      "Bash(flutter analyze *)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" status)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" log --oneline -5)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" add android/app/src/main/kotlin/com/example/chronoplan/MainActivity.kt lib/core/database/app_database.dart lib/core/database/app_database.g.dart lib/core/database/daos/categories_dao.dart lib/core/database/daos/dismissed_suggestions_dao.dart lib/core/database/daos/dismissed_suggestions_dao.g.dart lib/core/database/tables/dismissed_suggestions_table.dart lib/core/usage_stats/ lib/features/dashboard/dashboard_screen.dart lib/features/dashboard/widgets/usage_access_card.dart lib/features/dashboard/widgets/usage_suggestions_card.dart lib/features/history/history_screen.dart lib/providers/settings_provider.dart lib/providers/usage_stats_provider.dart lib/providers/usage_suggestions_provider.dart pubspec.lock pubspec.yaml)",
+      "Bash(git -C f:/Flutter_code/Flutter_projects/chronoplan commit -m ' *)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" push origin main)",
+      "WebFetch(domain:pub.dev)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" log --oneline -3)",
+      "Bash(git -C \"f:/Flutter_code/Flutter_projects/chronoplan\" add android/app/src/main/kotlin/com/example/chronoplan/MainActivity.kt lib/core/database/app_database.dart lib/core/database/app_database.g.dart lib/core/database/daos/log_entries_dao.dart lib/core/database/daos/dismissed_carves_dao.dart lib/core/database/daos/dismissed_carves_dao.g.dart lib/core/database/tables/dismissed_carves_table.dart lib/core/usage_stats/usage_permission_channel.dart lib/core/usage_stats/usage_stats_service.dart lib/core/usage_stats/carve_proposal.dart lib/features/day_view/day_view_screen.dart lib/features/day_view/widgets/ lib/providers/carve_proposals_provider.dart pubspec.lock pubspec.yaml)"
     ]
   }
 }

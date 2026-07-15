@@ -3,7 +3,28 @@
     "allow": [
       "Bash(flutter analyze *)",
       "Bash(flutter clean *)",
-      "Bash(dart run *)"
+      "Bash(dart run *)",
+      "Bash(where sqlite3.dll)",
+      "Read(//f//**)",
+      "Bash(find /c/Users/MARUF -iname \"sqlite3.dll\" 2>/dev/null | head -10; find /c/ -maxdepth 6 -iname \"*flutter*\" -type d 2>/dev/null | head -5)",
+      "Bash(find 'C:\\\\Users\\\\MARUF/AppData/Local/Pub/Cache/hosted' -maxdepth 1 -iname * -type d)",
+      "Bash(find 'C:\\\\Users\\\\MARUF/AppData/Local/Pub/Cache/hosted' -ipath *sqlite3_flutter_libs* -iname *.dll)",
+      "Bash(dart --version)",
+      "Bash(powershell -Command \"Get-ChildItem -Path 'C:\\\\' -Recurse -Filter 'sqlite3.dll' -ErrorAction SilentlyContinue -Depth 4\")",
+      "Bash(find \"/f/Flutter/flutter\" -path \"*lib/core/*num.dart\" 2>/dev/null | head -5 *)",
+      "Bash(dart analyze *)",
+      "Bash(flutter test *)",
+      "Bash(echo \"EXIT: $?\")",
+      "Bash(flutter pub *)",
+      "Bash(find \"$HOME/AppData/Local/Android\" -iname \"android.jar\" 2>/dev/null | head -5 *)",
+      "Bash(env)",
+      "Bash(which javap 2>/dev/null *)",
+      "Bash('/c/Program Files/Eclipse Adoptium/jdk-21.0.8.9-hotspot/bin/javap.exe' -classpath android.jar -constants 'android.app.usage.UsageEvents$Event')",
+      "Bash(taskkill //F //IM flutter.bat //T)",
+      "Bash(taskkill //F //IM dart.exe //T)",
+      "Bash(taskkill //F //IM bash.exe //T)",
+      "Bash(pkill -f \"du -sh\")",
+      "Bash(timeout 10 du -h --max-depth=1 \"/c/Users/MARUF/AppData/Local\")"
     ]
   }
 }

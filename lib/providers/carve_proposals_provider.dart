@@ -83,7 +83,8 @@ final carveProposalsProvider =
     if (entryDurationMinutes <= 0) continue;
 
     for (final app in apps) {
-      if (app.durationMinutes < 10) continue;
+      // Minimum-duration threshold is enforced once, in
+      // UsageStatsService._sliceByHour — apps below it never reach `hourly`.
 
       // Auto-suppress: if the user already described this app in the entry.
       if (loggedEntry.description

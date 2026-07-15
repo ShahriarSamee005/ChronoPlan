@@ -4,6 +4,7 @@ import android.app.AppOpsManager
 import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -13,11 +14,8 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
 
-    // Handles permission check + settings navigation (unchanged from Phase 1).
     private val permissionChannel = "com.example.chronoplan/usage_permission"
-
-    // Handles raw usage-event queries for accurate per-hour session reconstruction.
-    private val usageStatsChannel = "com.example.chronoplan/usage_stats"
+    private val usageStatsChannel  = "com.example.chronoplan/usage_stats"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -25,7 +23,7 @@ class MainActivity : FlutterActivity() {
         MethodChannel(flutterEngine.dartExecutor.binaryMessenger, permissionChannel)
             .setMethodCallHandler { call, result ->
                 when (call.method) {
-                    "isUsageAccessGranted" -> result.success(checkUsagePermission())
+                    "isUsageAccessGranted"   -> result.success(checkUsagePermission())
                     "openUsageAccessSettings" -> {
                         startActivity(Intent(Settings.ACTION_USAGE_ACCESS_SETTINGS))
                         result.success(null)
@@ -38,12 +36,18 @@ class MainActivity : FlutterActivity() {
             .setMethodCallHandler { call, result ->
                 when (call.method) {
                     "queryUsageEvents" -> {
-                        // Dart sends DateTime.millisecondsSinceEpoch (int).
-                        // Flutter's standard codec encodes values > 2^31 as Long;
-                        // handle both Int and Long defensively.
                         val startMs = toLong(call.argument("startMs"))
                         val endMs   = toLong(call.argument("endMs"))
                         result.success(queryUsageEvents(startMs, endMs))
+                    }
+                    "queryUsageEventsDebug" -> {
+                        val startMs = toLong(call.argument("startMs"))
+                        val endMs   = toLong(call.argument("endMs"))
+                        result.success(queryUsageEventsDebug(startMs, endMs))
+                    }
+                    "resolveAppInfo" -> {
+                        val packages = call.argument<List<String>>("packages") ?: emptyList()
+                        result.success(resolveAppInfo(packages))
                     }
                     else -> result.notImplemented()
                 }
@@ -51,42 +55,108 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Returns raw MOVE_TO_FOREGROUND / MOVE_TO_BACKGROUND (and DEVICE_SHUTDOWN)
-     * events in [startMs, endMs] as a flat list of maps with short keys:
-     *   "p"  – packageName
-     *   "t"  – eventType  (1 = foreground, 2 = background, 22 = device shutdown)
-     *   "ts" – timeStamp  (milliseconds since epoch)
+     * Production query.  Only the five event types the Dart session-reconstruction
+     * algorithm needs are emitted; all others are silently dropped.
      *
-     * Events are returned in the order the OS provides them (chronological per doc).
-     * Session reconstruction and per-hour slicing happen entirely in Dart.
+     *  1  = MOVE_TO_FOREGROUND     → opens a foreground session for the package
+     *  2  = MOVE_TO_BACKGROUND     → closes the session for that package
+     *  16 = SCREEN_NON_INTERACTIVE → screen off; close whatever is currently open
+     *  17 = KEYGUARD_SHOWN         → lock screen shown; close whatever is open
+     *  26 = DEVICE_SHUTDOWN        → device reboot; close whatever is open
+     *                                (API 30+; safe to match on older API — event won't fire)
      *
-     * queryEvents only retains raw events for a limited recent window (typically
-     * a few days on AOSP). Deep historical backfill is not possible via this path.
+     * Events 16/17/26 carry no meaningful packageName; the Dart side treats them
+     * as a global session-break signal and ignores the "p" field.
+     *
+     * The previous code hardcoded 22 as DEVICE_SHUTDOWN — that constant is actually
+     * ROLLOVER_FOREGROUND_SERVICE and was never the right event.  26 is used here
+     * directly to avoid a @RequiresApi guard while matching the Dart-side constant.
      */
     private fun queryUsageEvents(startMs: Long, endMs: Long): List<Map<String, Any>> {
         val usm = getSystemService(UsageStatsManager::class.java) ?: return emptyList()
         val usageEvents = usm.queryEvents(startMs, endMs) ?: return emptyList()
-
         val events = mutableListOf<Map<String, Any>>()
-        val event = UsageEvents.Event()
-
+        val event  = UsageEvents.Event()
         while (usageEvents.hasNextEvent()) {
             usageEvents.getNextEvent(event)
             when (event.eventType) {
-                UsageEvents.Event.MOVE_TO_FOREGROUND,   // 1
-                UsageEvents.Event.MOVE_TO_BACKGROUND,   // 2
-                22,                                      // DEVICE_SHUTDOWN (API 28+)
-                -> events.add(
-                    mapOf(
-                        "p"  to event.packageName,
-                        "t"  to event.eventType,
-                        "ts" to event.timeStamp,
-                    )
-                )
-                else -> { /* ignore other event types */ }
+                1,   // MOVE_TO_FOREGROUND
+                2,   // MOVE_TO_BACKGROUND
+                16,  // SCREEN_NON_INTERACTIVE
+                17,  // KEYGUARD_SHOWN
+                26,  // DEVICE_SHUTDOWN
+                -> events.add(mapOf(
+                    "p"  to (event.packageName ?: ""),
+                    "t"  to event.eventType,
+                    "ts" to event.timeStamp,
+                ))
+                else -> { /* other event types not needed for session reconstruction */ }
             }
         }
         return events
+    }
+
+    /**
+     * Debug query: emits every event type unfiltered with a human-readable
+     * "tn" (type name) field alongside the standard "p"/"t"/"ts" keys,
+     * so the diagnostic screen can display them directly.
+     */
+    private fun queryUsageEventsDebug(startMs: Long, endMs: Long): List<Map<String, Any>> {
+        val usm = getSystemService(UsageStatsManager::class.java) ?: return emptyList()
+        val usageEvents = usm.queryEvents(startMs, endMs) ?: return emptyList()
+        val events = mutableListOf<Map<String, Any>>()
+        val event  = UsageEvents.Event()
+        while (usageEvents.hasNextEvent()) {
+            usageEvents.getNextEvent(event)
+            events.add(mapOf(
+                "p"  to (event.packageName ?: ""),
+                "t"  to event.eventType,
+                "tn" to eventTypeName(event.eventType),
+                "ts" to event.timeStamp,
+            ))
+        }
+        return events.sortedBy { it["ts"] as Long }
+    }
+
+    private fun eventTypeName(type: Int): String = when (type) {
+        1  -> "FOREGROUND"
+        2  -> "BACKGROUND"
+        5  -> "CONFIGURATION_CHANGE"
+        6  -> "SYSTEM_INTERACTION"
+        7  -> "USER_INTERACTION"
+        15 -> "SCREEN_INTERACTIVE"
+        16 -> "SCREEN_NON_INTERACTIVE"
+        17 -> "KEYGUARD_SHOWN"
+        18 -> "KEYGUARD_HIDDEN"
+        26 -> "DEVICE_SHUTDOWN"
+        else -> "TYPE_$type"
+    }
+
+    /**
+     * Resolves the display label and user-facing flag for each package via
+     * PackageManager.  A package is non-user-facing if it is a system app
+     * (FLAG_SYSTEM) or is our own package.  Unresolvable packages (uninstalled)
+     * fall back to the last dot-segment as label with userFacing=true (safe over-count).
+     */
+    private fun resolveAppInfo(packages: List<String>): Map<String, Map<String, Any>> {
+        val pm     = packageManager
+        val ownPkg = packageName
+        val result = mutableMapOf<String, Map<String, Any>>()
+        for (pkg in packages) {
+            try {
+                val info       = pm.getApplicationInfo(pkg, 0)
+                val label      = pm.getApplicationLabel(info).toString()
+                val isSystem   = (info.flags and ApplicationInfo.FLAG_SYSTEM) != 0
+                val userFacing = !isSystem && pkg != ownPkg
+                result[pkg] = mapOf("label" to label, "userFacing" to userFacing)
+            } catch (_: Exception) {
+                result[pkg] = mapOf(
+                    "label"      to (pkg.split(".").lastOrNull() ?: pkg),
+                    "userFacing" to true,
+                )
+            }
+        }
+        return result
     }
 
     private fun checkUsagePermission(): Boolean {

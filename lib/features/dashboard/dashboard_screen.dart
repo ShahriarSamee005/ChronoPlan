@@ -13,9 +13,6 @@ import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
 import 'widgets/time_gradient_background.dart';
-import 'widgets/usage_access_card.dart';
-import 'widgets/usage_suggestions_card.dart';
-import 'widgets/weekly_insight_card.dart';
 import '../../providers/usage_stats_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -165,11 +162,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
               const SizedBox(height: 12),
               const DailyPieChartCard(),
               const SizedBox(height: 12),
-              const WeeklyInsightCard(),
-              const SizedBox(height: 12),
-              const UsageAccessCard(),
-              const SizedBox(height: 12),
-              const UsageSuggestionsCard(),
+              _ScreenTimeCard(onTap: () => context.push('/screen-time')),
               const SizedBox(height: 12),
               _DebriefCard(onTap: () => context.push('/debrief')),
             ],
@@ -288,6 +281,80 @@ class _IntentionPromptDialogState extends State<_IntentionPromptDialog> {
 final notificationTapStreamProvider = StreamProvider<String>((ref) {
   return ref.watch(notificationServiceProvider).tapStream;
 });
+
+// ── Screen Time entry card ────────────────────────────────────────────────────
+
+class _ScreenTimeCard extends ConsumerWidget {
+  final VoidCallback onTap;
+  const _ScreenTimeCard({required this.onTap});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final accent = AppColors.accentForHour(DateTime.now().hour);
+    final usageAsync = ref.watch(todayUsageProvider);
+    final totalMinutes = usageAsync.valueOrNull
+            ?.fold(0, (s, a) => s + a.durationMinutes) ??
+        0;
+    final subtitle = totalMinutes > 0
+        ? _fmtMinutes(totalMinutes)
+        : 'Tap to view screen time';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: Colors.white.withValues(alpha: 0.07),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: accent.withValues(alpha: 0.18),
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Icon(Icons.phone_android_rounded, color: accent, size: 22),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const Text(
+                    'Screen Time',
+                    style: TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 15,
+                    ),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    subtitle,
+                    style: const TextStyle(color: Colors.white54, fontSize: 12),
+                  ),
+                ],
+              ),
+            ),
+            const Icon(Icons.chevron_right_rounded,
+                color: Colors.white30, size: 20),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+String _fmtMinutes(int minutes) {
+  final h = minutes ~/ 60;
+  final m = minutes % 60;
+  if (h == 0) return '${m}m today';
+  if (m == 0) return '${h}h today';
+  return '${h}h ${m}m today';
+}
 
 // ── Debrief entry card ────────────────────────────────────────────────────────
 

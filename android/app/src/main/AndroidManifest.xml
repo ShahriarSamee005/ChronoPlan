@@ -65,5 +65,13 @@
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>
         </intent>
+        <!-- Required since Android 11 (API 30) package visibility: without this,
+             PackageManager.getLaunchIntentForPackage()/getApplicationInfo() return
+             null / throw for every other installed app, which silently made the
+             Usage Stats "user-facing app" filter exclude everything. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+        </intent>
     </queries>
 </manifest>

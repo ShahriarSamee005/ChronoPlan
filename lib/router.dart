@@ -1,10 +1,12 @@
 import 'package:go_router/go_router.dart';
 
 import 'features/about/about_screen.dart';
+import 'features/screen_time/screen_time_screen.dart';
 import 'features/categories/categories_screen.dart';
 import 'features/dashboard/dashboard_screen.dart';
 import 'features/day_view/day_view_screen.dart';
 import 'features/debrief/debrief_screen.dart';
+import 'features/debug/usage_debug_screen.dart';
 import 'features/history/history_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/routine/routine_screen.dart';
@@ -58,6 +60,15 @@ final router = GoRouter(
     GoRoute(
       path: '/categories',
       builder: (context, state) => const CategoriesScreen(),
+    ),
+    GoRoute(
+      path: '/screen-time',
+      builder: (context, state) => const ScreenTimeScreen(),
+    ),
+    // TEMPORARY — reachable only via a long-press on the Screen Time title.
+    GoRoute(
+      path: '/debug-usage',
+      builder: (context, state) => const UsageDebugScreen(),
     ),
   ],
 );
