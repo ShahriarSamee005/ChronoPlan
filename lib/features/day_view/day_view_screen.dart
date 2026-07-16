@@ -7,6 +7,7 @@ import '../../core/database/app_database.dart';
 import '../../core/theme/glass_card.dart';
 import '../../providers/carve_proposals_provider.dart';
 import '../../providers/categories_provider.dart';
+import '../../providers/database_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
@@ -25,6 +26,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   late DateTime _date;
   static const double _hourPx = 76.0;
   final _scrollCtrl = ScrollController();
+  final Set<int> _pendingDeleteIds = {};
 
   @override
   void initState() {
@@ -112,23 +114,37 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
       body: TimeGradientBackground(
         child: SafeArea(
           child: entriesAsync.when(
-            data: (entries) => _Timeline(
-              date: _date,
-              entries: entries,
-              cats: catsAsync.valueOrNull ?? [],
-              routineSlots: todaySlots,
-              carveProposals: carveProposals,
-              isToday: _isToday,
-              scrollCtrl: _scrollCtrl,
-              hourPx: _hourPx,
-              onEntryTap: (entry) => showModalBottomSheet(
-                context: context,
-                isScrollControlled: true,
-                useRootNavigator: true,
-                backgroundColor: Colors.transparent,
-                builder: (_) => LogEntrySheet(existing: entry),
-              ),
-            ),
+            data: (entries) {
+              _pendingDeleteIds.removeWhere(
+                  (id) => !entries.any((e) => e.id == id));
+              final visible = entries
+                  .where((e) => !_pendingDeleteIds.contains(e.id))
+                  .toList();
+              return _Timeline(
+                date: _date,
+                entries: visible,
+                cats: catsAsync.valueOrNull ?? [],
+                routineSlots: todaySlots,
+                carveProposals: carveProposals,
+                isToday: _isToday,
+                scrollCtrl: _scrollCtrl,
+                hourPx: _hourPx,
+                onEntryTap: (entry) => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  useRootNavigator: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => LogEntrySheet(existing: entry),
+                ),
+                onDeleteEntry: (entry) {
+                  setState(() => _pendingDeleteIds.add(entry.id));
+                  ref
+                      .read(appDatabaseProvider)
+                      .logEntriesDao
+                      .deleteEntry(entry.id);
+                },
+              );
+            },
             loading: () =>
                 const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
@@ -207,6 +223,7 @@ class _Timeline extends StatelessWidget {
   final ScrollController scrollCtrl;
   final double hourPx;
   final void Function(LogEntry) onEntryTap;
+  final void Function(LogEntry) onDeleteEntry;
 
   const _Timeline({
     required this.date,
@@ -218,6 +235,7 @@ class _Timeline extends StatelessWidget {
     required this.scrollCtrl,
     required this.hourPx,
     required this.onEntryTap,
+    required this.onDeleteEntry,
   });
 
   @override
@@ -454,9 +472,25 @@ class _Timeline extends StatelessWidget {
       left: 2,
       right: 2,
       height: height,
-      child: GestureDetector(
-        onTap: () => onEntryTap(entry),
-        child: GlassCard(
+      child: Dismissible(
+        key: ValueKey('logentry_${entry.id}'),
+        direction:
+            isToday ? DismissDirection.endToStart : DismissDirection.none,
+        resizeDuration: null,
+        background: Container(
+          alignment: Alignment.centerRight,
+          padding: const EdgeInsets.only(right: 12),
+          decoration: BoxDecoration(
+            color: Colors.redAccent.withValues(alpha: 0.20),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: const Icon(Icons.delete_outline_rounded,
+              color: Colors.redAccent, size: 18),
+        ),
+        onDismissed: (_) => onDeleteEntry(entry),
+        child: GestureDetector(
+          onTap: () => onEntryTap(entry),
+          child: GlassCard(
           borderRadius: 8,
           opacity: 0.13,
           blurSigma: 6,
@@ -501,6 +535,7 @@ class _Timeline extends StatelessWidget {
                 ),
             ],
           ),
+        ),
         ),
       ),
     );
