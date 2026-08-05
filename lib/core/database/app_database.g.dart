@@ -3073,6 +3073,378 @@ class DismissedCarvesCompanion extends UpdateCompanion<DismissedCarve> {
   }
 }
 
+class $IntentionTasksTable extends IntentionTasks
+    with TableInfo<$IntentionTasksTable, IntentionTask> {
+  @override
+  final GeneratedDatabase attachedDatabase;
+  final String? _alias;
+  $IntentionTasksTable(this.attachedDatabase, [this._alias]);
+  static const VerificationMeta _idMeta = const VerificationMeta('id');
+  @override
+  late final GeneratedColumn<int> id = GeneratedColumn<int>(
+      'id', aliasedName, false,
+      hasAutoIncrement: true,
+      type: DriftSqlType.int,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('PRIMARY KEY AUTOINCREMENT'));
+  static const VerificationMeta _labelMeta = const VerificationMeta('label');
+  @override
+  late final GeneratedColumn<String> label = GeneratedColumn<String>(
+      'label', aliasedName, false,
+      type: DriftSqlType.string, requiredDuringInsert: true);
+  static const VerificationMeta _isDoneMeta = const VerificationMeta('isDone');
+  @override
+  late final GeneratedColumn<bool> isDone = GeneratedColumn<bool>(
+      'is_done', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_done" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _doneAtMeta = const VerificationMeta('doneAt');
+  @override
+  late final GeneratedColumn<DateTime> doneAt = GeneratedColumn<DateTime>(
+      'done_at', aliasedName, true,
+      type: DriftSqlType.dateTime, requiredDuringInsert: false);
+  static const VerificationMeta _isFlaggedMeta =
+      const VerificationMeta('isFlagged');
+  @override
+  late final GeneratedColumn<bool> isFlagged = GeneratedColumn<bool>(
+      'is_flagged', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints:
+          GeneratedColumn.constraintIsAlways('CHECK ("is_flagged" IN (0, 1))'),
+      defaultValue: const Constant(false));
+  static const VerificationMeta _sortOrderMeta =
+      const VerificationMeta('sortOrder');
+  @override
+  late final GeneratedColumn<int> sortOrder = GeneratedColumn<int>(
+      'sort_order', aliasedName, false,
+      type: DriftSqlType.int, requiredDuringInsert: true);
+  static const VerificationMeta _dateMeta = const VerificationMeta('date');
+  @override
+  late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
+      'date', aliasedName, false,
+      type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  @override
+  List<GeneratedColumn> get $columns =>
+      [id, label, isDone, doneAt, isFlagged, sortOrder, date];
+  @override
+  String get aliasedName => _alias ?? actualTableName;
+  @override
+  String get actualTableName => $name;
+  static const String $name = 'intention_tasks';
+  @override
+  VerificationContext validateIntegrity(Insertable<IntentionTask> instance,
+      {bool isInserting = false}) {
+    final context = VerificationContext();
+    final data = instance.toColumns(true);
+    if (data.containsKey('id')) {
+      context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('label')) {
+      context.handle(
+          _labelMeta, label.isAcceptableOrUnknown(data['label']!, _labelMeta));
+    } else if (isInserting) {
+      context.missing(_labelMeta);
+    }
+    if (data.containsKey('is_done')) {
+      context.handle(_isDoneMeta,
+          isDone.isAcceptableOrUnknown(data['is_done']!, _isDoneMeta));
+    }
+    if (data.containsKey('done_at')) {
+      context.handle(_doneAtMeta,
+          doneAt.isAcceptableOrUnknown(data['done_at']!, _doneAtMeta));
+    }
+    if (data.containsKey('is_flagged')) {
+      context.handle(_isFlaggedMeta,
+          isFlagged.isAcceptableOrUnknown(data['is_flagged']!, _isFlaggedMeta));
+    }
+    if (data.containsKey('sort_order')) {
+      context.handle(_sortOrderMeta,
+          sortOrder.isAcceptableOrUnknown(data['sort_order']!, _sortOrderMeta));
+    } else if (isInserting) {
+      context.missing(_sortOrderMeta);
+    }
+    if (data.containsKey('date')) {
+      context.handle(
+          _dateMeta, date.isAcceptableOrUnknown(data['date']!, _dateMeta));
+    } else if (isInserting) {
+      context.missing(_dateMeta);
+    }
+    return context;
+  }
+
+  @override
+  Set<GeneratedColumn> get $primaryKey => {id};
+  @override
+  IntentionTask map(Map<String, dynamic> data, {String? tablePrefix}) {
+    final effectivePrefix = tablePrefix != null ? '$tablePrefix.' : '';
+    return IntentionTask(
+      id: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}id'])!,
+      label: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}label'])!,
+      isDone: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_done'])!,
+      doneAt: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}done_at']),
+      isFlagged: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_flagged'])!,
+      sortOrder: attachedDatabase.typeMapping
+          .read(DriftSqlType.int, data['${effectivePrefix}sort_order'])!,
+      date: attachedDatabase.typeMapping
+          .read(DriftSqlType.dateTime, data['${effectivePrefix}date'])!,
+    );
+  }
+
+  @override
+  $IntentionTasksTable createAlias(String alias) {
+    return $IntentionTasksTable(attachedDatabase, alias);
+  }
+}
+
+class IntentionTask extends DataClass implements Insertable<IntentionTask> {
+  final int id;
+  final String label;
+  final bool isDone;
+  final DateTime? doneAt;
+  final bool isFlagged;
+  final int sortOrder;
+  final DateTime date;
+  const IntentionTask(
+      {required this.id,
+      required this.label,
+      required this.isDone,
+      this.doneAt,
+      required this.isFlagged,
+      required this.sortOrder,
+      required this.date});
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    map['id'] = Variable<int>(id);
+    map['label'] = Variable<String>(label);
+    map['is_done'] = Variable<bool>(isDone);
+    if (!nullToAbsent || doneAt != null) {
+      map['done_at'] = Variable<DateTime>(doneAt);
+    }
+    map['is_flagged'] = Variable<bool>(isFlagged);
+    map['sort_order'] = Variable<int>(sortOrder);
+    map['date'] = Variable<DateTime>(date);
+    return map;
+  }
+
+  IntentionTasksCompanion toCompanion(bool nullToAbsent) {
+    return IntentionTasksCompanion(
+      id: Value(id),
+      label: Value(label),
+      isDone: Value(isDone),
+      doneAt:
+          doneAt == null && nullToAbsent ? const Value.absent() : Value(doneAt),
+      isFlagged: Value(isFlagged),
+      sortOrder: Value(sortOrder),
+      date: Value(date),
+    );
+  }
+
+  factory IntentionTask.fromJson(Map<String, dynamic> json,
+      {ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return IntentionTask(
+      id: serializer.fromJson<int>(json['id']),
+      label: serializer.fromJson<String>(json['label']),
+      isDone: serializer.fromJson<bool>(json['isDone']),
+      doneAt: serializer.fromJson<DateTime?>(json['doneAt']),
+      isFlagged: serializer.fromJson<bool>(json['isFlagged']),
+      sortOrder: serializer.fromJson<int>(json['sortOrder']),
+      date: serializer.fromJson<DateTime>(json['date']),
+    );
+  }
+  @override
+  Map<String, dynamic> toJson({ValueSerializer? serializer}) {
+    serializer ??= driftRuntimeOptions.defaultSerializer;
+    return <String, dynamic>{
+      'id': serializer.toJson<int>(id),
+      'label': serializer.toJson<String>(label),
+      'isDone': serializer.toJson<bool>(isDone),
+      'doneAt': serializer.toJson<DateTime?>(doneAt),
+      'isFlagged': serializer.toJson<bool>(isFlagged),
+      'sortOrder': serializer.toJson<int>(sortOrder),
+      'date': serializer.toJson<DateTime>(date),
+    };
+  }
+
+  IntentionTask copyWith(
+          {int? id,
+          String? label,
+          bool? isDone,
+          Value<DateTime?> doneAt = const Value.absent(),
+          bool? isFlagged,
+          int? sortOrder,
+          DateTime? date}) =>
+      IntentionTask(
+        id: id ?? this.id,
+        label: label ?? this.label,
+        isDone: isDone ?? this.isDone,
+        doneAt: doneAt.present ? doneAt.value : this.doneAt,
+        isFlagged: isFlagged ?? this.isFlagged,
+        sortOrder: sortOrder ?? this.sortOrder,
+        date: date ?? this.date,
+      );
+  IntentionTask copyWithCompanion(IntentionTasksCompanion data) {
+    return IntentionTask(
+      id: data.id.present ? data.id.value : this.id,
+      label: data.label.present ? data.label.value : this.label,
+      isDone: data.isDone.present ? data.isDone.value : this.isDone,
+      doneAt: data.doneAt.present ? data.doneAt.value : this.doneAt,
+      isFlagged: data.isFlagged.present ? data.isFlagged.value : this.isFlagged,
+      sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
+      date: data.date.present ? data.date.value : this.date,
+    );
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IntentionTask(')
+          ..write('id: $id, ')
+          ..write('label: $label, ')
+          ..write('isDone: $isDone, ')
+          ..write('doneAt: $doneAt, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('date: $date')
+          ..write(')'))
+        .toString();
+  }
+
+  @override
+  int get hashCode =>
+      Object.hash(id, label, isDone, doneAt, isFlagged, sortOrder, date);
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      (other is IntentionTask &&
+          other.id == this.id &&
+          other.label == this.label &&
+          other.isDone == this.isDone &&
+          other.doneAt == this.doneAt &&
+          other.isFlagged == this.isFlagged &&
+          other.sortOrder == this.sortOrder &&
+          other.date == this.date);
+}
+
+class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
+  final Value<int> id;
+  final Value<String> label;
+  final Value<bool> isDone;
+  final Value<DateTime?> doneAt;
+  final Value<bool> isFlagged;
+  final Value<int> sortOrder;
+  final Value<DateTime> date;
+  const IntentionTasksCompanion({
+    this.id = const Value.absent(),
+    this.label = const Value.absent(),
+    this.isDone = const Value.absent(),
+    this.doneAt = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    this.sortOrder = const Value.absent(),
+    this.date = const Value.absent(),
+  });
+  IntentionTasksCompanion.insert({
+    this.id = const Value.absent(),
+    required String label,
+    this.isDone = const Value.absent(),
+    this.doneAt = const Value.absent(),
+    this.isFlagged = const Value.absent(),
+    required int sortOrder,
+    required DateTime date,
+  })  : label = Value(label),
+        sortOrder = Value(sortOrder),
+        date = Value(date);
+  static Insertable<IntentionTask> custom({
+    Expression<int>? id,
+    Expression<String>? label,
+    Expression<bool>? isDone,
+    Expression<DateTime>? doneAt,
+    Expression<bool>? isFlagged,
+    Expression<int>? sortOrder,
+    Expression<DateTime>? date,
+  }) {
+    return RawValuesInsertable({
+      if (id != null) 'id': id,
+      if (label != null) 'label': label,
+      if (isDone != null) 'is_done': isDone,
+      if (doneAt != null) 'done_at': doneAt,
+      if (isFlagged != null) 'is_flagged': isFlagged,
+      if (sortOrder != null) 'sort_order': sortOrder,
+      if (date != null) 'date': date,
+    });
+  }
+
+  IntentionTasksCompanion copyWith(
+      {Value<int>? id,
+      Value<String>? label,
+      Value<bool>? isDone,
+      Value<DateTime?>? doneAt,
+      Value<bool>? isFlagged,
+      Value<int>? sortOrder,
+      Value<DateTime>? date}) {
+    return IntentionTasksCompanion(
+      id: id ?? this.id,
+      label: label ?? this.label,
+      isDone: isDone ?? this.isDone,
+      doneAt: doneAt ?? this.doneAt,
+      isFlagged: isFlagged ?? this.isFlagged,
+      sortOrder: sortOrder ?? this.sortOrder,
+      date: date ?? this.date,
+    );
+  }
+
+  @override
+  Map<String, Expression> toColumns(bool nullToAbsent) {
+    final map = <String, Expression>{};
+    if (id.present) {
+      map['id'] = Variable<int>(id.value);
+    }
+    if (label.present) {
+      map['label'] = Variable<String>(label.value);
+    }
+    if (isDone.present) {
+      map['is_done'] = Variable<bool>(isDone.value);
+    }
+    if (doneAt.present) {
+      map['done_at'] = Variable<DateTime>(doneAt.value);
+    }
+    if (isFlagged.present) {
+      map['is_flagged'] = Variable<bool>(isFlagged.value);
+    }
+    if (sortOrder.present) {
+      map['sort_order'] = Variable<int>(sortOrder.value);
+    }
+    if (date.present) {
+      map['date'] = Variable<DateTime>(date.value);
+    }
+    return map;
+  }
+
+  @override
+  String toString() {
+    return (StringBuffer('IntentionTasksCompanion(')
+          ..write('id: $id, ')
+          ..write('label: $label, ')
+          ..write('isDone: $isDone, ')
+          ..write('doneAt: $doneAt, ')
+          ..write('isFlagged: $isFlagged, ')
+          ..write('sortOrder: $sortOrder, ')
+          ..write('date: $date')
+          ..write(')'))
+        .toString();
+  }
+}
+
 abstract class _$AppDatabase extends GeneratedDatabase {
   _$AppDatabase(QueryExecutor e) : super(e);
   $AppDatabaseManager get managers => $AppDatabaseManager(this);
@@ -3086,6 +3458,7 @@ abstract class _$AppDatabase extends GeneratedDatabase {
       $DismissedSuggestionsTable(this);
   late final $DismissedCarvesTable dismissedCarves =
       $DismissedCarvesTable(this);
+  late final $IntentionTasksTable intentionTasks = $IntentionTasksTable(this);
   late final CategoriesDao categoriesDao = CategoriesDao(this as AppDatabase);
   late final DismissedCarvesDao dismissedCarvesDao =
       DismissedCarvesDao(this as AppDatabase);
@@ -3095,6 +3468,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
   late final RoutineSlotsDao routineSlotsDao =
       RoutineSlotsDao(this as AppDatabase);
   late final IntentionsDao intentionsDao = IntentionsDao(this as AppDatabase);
+  late final IntentionTasksDao intentionTasksDao =
+      IntentionTasksDao(this as AppDatabase);
   @override
   Iterable<TableInfo<Table, Object?>> get allTables =>
       allSchemaEntities.whereType<TableInfo<Table, Object?>>();
@@ -3106,7 +3481,8 @@ abstract class _$AppDatabase extends GeneratedDatabase {
         dailyIntentions,
         userSettings,
         dismissedSuggestions,
-        dismissedCarves
+        dismissedCarves,
+        intentionTasks
       ];
 }
 
@@ -4609,6 +4985,204 @@ typedef $$DismissedCarvesTableProcessedTableManager = ProcessedTableManager<
     ),
     DismissedCarve,
     PrefetchHooks Function()>;
+typedef $$IntentionTasksTableCreateCompanionBuilder = IntentionTasksCompanion
+    Function({
+  Value<int> id,
+  required String label,
+  Value<bool> isDone,
+  Value<DateTime?> doneAt,
+  Value<bool> isFlagged,
+  required int sortOrder,
+  required DateTime date,
+});
+typedef $$IntentionTasksTableUpdateCompanionBuilder = IntentionTasksCompanion
+    Function({
+  Value<int> id,
+  Value<String> label,
+  Value<bool> isDone,
+  Value<DateTime?> doneAt,
+  Value<bool> isFlagged,
+  Value<int> sortOrder,
+  Value<DateTime> date,
+});
+
+class $$IntentionTasksTableFilterComposer
+    extends Composer<_$AppDatabase, $IntentionTasksTable> {
+  $$IntentionTasksTableFilterComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnFilters<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isDone => $composableBuilder(
+      column: $table.isDone, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get doneAt => $composableBuilder(
+      column: $table.doneAt, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isFlagged => $composableBuilder(
+      column: $table.isFlagged, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<int> get sortOrder => $composableBuilder(
+      column: $table.sortOrder, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<DateTime> get date => $composableBuilder(
+      column: $table.date, builder: (column) => ColumnFilters(column));
+}
+
+class $$IntentionTasksTableOrderingComposer
+    extends Composer<_$AppDatabase, $IntentionTasksTable> {
+  $$IntentionTasksTableOrderingComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  ColumnOrderings<int> get id => $composableBuilder(
+      column: $table.id, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get label => $composableBuilder(
+      column: $table.label, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isDone => $composableBuilder(
+      column: $table.isDone, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get doneAt => $composableBuilder(
+      column: $table.doneAt, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<bool> get isFlagged => $composableBuilder(
+      column: $table.isFlagged, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<int> get sortOrder => $composableBuilder(
+      column: $table.sortOrder, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<DateTime> get date => $composableBuilder(
+      column: $table.date, builder: (column) => ColumnOrderings(column));
+}
+
+class $$IntentionTasksTableAnnotationComposer
+    extends Composer<_$AppDatabase, $IntentionTasksTable> {
+  $$IntentionTasksTableAnnotationComposer({
+    required super.$db,
+    required super.$table,
+    super.joinBuilder,
+    super.$addJoinBuilderToRootComposer,
+    super.$removeJoinBuilderFromRootComposer,
+  });
+  GeneratedColumn<int> get id =>
+      $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<String> get label =>
+      $composableBuilder(column: $table.label, builder: (column) => column);
+
+  GeneratedColumn<bool> get isDone =>
+      $composableBuilder(column: $table.isDone, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get doneAt =>
+      $composableBuilder(column: $table.doneAt, builder: (column) => column);
+
+  GeneratedColumn<bool> get isFlagged =>
+      $composableBuilder(column: $table.isFlagged, builder: (column) => column);
+
+  GeneratedColumn<int> get sortOrder =>
+      $composableBuilder(column: $table.sortOrder, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get date =>
+      $composableBuilder(column: $table.date, builder: (column) => column);
+}
+
+class $$IntentionTasksTableTableManager extends RootTableManager<
+    _$AppDatabase,
+    $IntentionTasksTable,
+    IntentionTask,
+    $$IntentionTasksTableFilterComposer,
+    $$IntentionTasksTableOrderingComposer,
+    $$IntentionTasksTableAnnotationComposer,
+    $$IntentionTasksTableCreateCompanionBuilder,
+    $$IntentionTasksTableUpdateCompanionBuilder,
+    (
+      IntentionTask,
+      BaseReferences<_$AppDatabase, $IntentionTasksTable, IntentionTask>
+    ),
+    IntentionTask,
+    PrefetchHooks Function()> {
+  $$IntentionTasksTableTableManager(
+      _$AppDatabase db, $IntentionTasksTable table)
+      : super(TableManagerState(
+          db: db,
+          table: table,
+          createFilteringComposer: () =>
+              $$IntentionTasksTableFilterComposer($db: db, $table: table),
+          createOrderingComposer: () =>
+              $$IntentionTasksTableOrderingComposer($db: db, $table: table),
+          createComputedFieldComposer: () =>
+              $$IntentionTasksTableAnnotationComposer($db: db, $table: table),
+          updateCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            Value<String> label = const Value.absent(),
+            Value<bool> isDone = const Value.absent(),
+            Value<DateTime?> doneAt = const Value.absent(),
+            Value<bool> isFlagged = const Value.absent(),
+            Value<int> sortOrder = const Value.absent(),
+            Value<DateTime> date = const Value.absent(),
+          }) =>
+              IntentionTasksCompanion(
+            id: id,
+            label: label,
+            isDone: isDone,
+            doneAt: doneAt,
+            isFlagged: isFlagged,
+            sortOrder: sortOrder,
+            date: date,
+          ),
+          createCompanionCallback: ({
+            Value<int> id = const Value.absent(),
+            required String label,
+            Value<bool> isDone = const Value.absent(),
+            Value<DateTime?> doneAt = const Value.absent(),
+            Value<bool> isFlagged = const Value.absent(),
+            required int sortOrder,
+            required DateTime date,
+          }) =>
+              IntentionTasksCompanion.insert(
+            id: id,
+            label: label,
+            isDone: isDone,
+            doneAt: doneAt,
+            isFlagged: isFlagged,
+            sortOrder: sortOrder,
+            date: date,
+          ),
+          withReferenceMapper: (p0) => p0
+              .map((e) => (e.readTable(table), BaseReferences(db, table, e)))
+              .toList(),
+          prefetchHooksCallback: null,
+        ));
+}
+
+typedef $$IntentionTasksTableProcessedTableManager = ProcessedTableManager<
+    _$AppDatabase,
+    $IntentionTasksTable,
+    IntentionTask,
+    $$IntentionTasksTableFilterComposer,
+    $$IntentionTasksTableOrderingComposer,
+    $$IntentionTasksTableAnnotationComposer,
+    $$IntentionTasksTableCreateCompanionBuilder,
+    $$IntentionTasksTableUpdateCompanionBuilder,
+    (
+      IntentionTask,
+      BaseReferences<_$AppDatabase, $IntentionTasksTable, IntentionTask>
+    ),
+    IntentionTask,
+    PrefetchHooks Function()>;
 
 class $AppDatabaseManager {
   final _$AppDatabase _db;
@@ -4627,4 +5201,6 @@ class $AppDatabaseManager {
       $$DismissedSuggestionsTableTableManager(_db, _db.dismissedSuggestions);
   $$DismissedCarvesTableTableManager get dismissedCarves =>
       $$DismissedCarvesTableTableManager(_db, _db.dismissedCarves);
+  $$IntentionTasksTableTableManager get intentionTasks =>
+      $$IntentionTasksTableTableManager(_db, _db.intentionTasks);
 }

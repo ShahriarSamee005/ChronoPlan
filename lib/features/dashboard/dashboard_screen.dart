@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/notifications/notification_service.dart';
 import '../../core/theme/app_colors.dart';
@@ -69,31 +68,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       // B10: always (re-)schedule Sunday reflection after cancelAll()
       await notifService.scheduleWeeklyReflection();
     }
-
-    // B8: show morning intention prompt if not yet set today
-    await _checkMorningPrompt();
-  }
-
-  Future<void> _checkMorningPrompt() async {
-    final prefs = await SharedPreferences.getInstance();
-    final today = DateTime.now();
-    final todayKey =
-        'intentionPrompt_${today.year}_${today.month}_${today.day}';
-    if (prefs.getBool(todayKey) == true) return;
-    await prefs.setBool(todayKey, true);
-
-    final db = ref.read(appDatabaseProvider);
-    final existing = await db.intentionsDao.getForDate(today);
-    if (existing != null && existing.intention.isNotEmpty) return;
-
-    if (!mounted) return;
-    await showDialog<void>(
-      context: context,
-      builder: (_) => _IntentionPromptDialog(
-        onSet: (text) =>
-            db.intentionsDao.upsertForDate(today, text),
-      ),
-    );
   }
 
   Future<void> _onPause() async {
@@ -179,100 +153,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       useRootNavigator: true,
       backgroundColor: Colors.transparent,
       builder: (_) => const LogEntrySheet(),
-    );
-  }
-}
-
-// ── Morning intention prompt dialog ──────────────────────────────────────────
-
-class _IntentionPromptDialog extends StatefulWidget {
-  final Future<void> Function(String) onSet;
-  const _IntentionPromptDialog({required this.onSet});
-
-  @override
-  State<_IntentionPromptDialog> createState() => _IntentionPromptDialogState();
-}
-
-class _IntentionPromptDialogState extends State<_IntentionPromptDialog> {
-  final _ctrl = TextEditingController();
-  bool _saving = false;
-
-  @override
-  void dispose() {
-    _ctrl.dispose();
-    super.dispose();
-  }
-
-  Future<void> _save() async {
-    final text = _ctrl.text.trim();
-    if (text.isEmpty) {
-      Navigator.of(context).pop();
-      return;
-    }
-    setState(() => _saving = true);
-    await widget.onSet(text);
-    if (mounted) Navigator.of(context).pop();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return AlertDialog(
-      backgroundColor: const Color(0xFF1E1E2E),
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-      title: const Text(
-        "Good morning! 🌅",
-        style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
-      ),
-      content: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Text(
-            "What's the one thing that would make today a win?",
-            style: TextStyle(color: Colors.white70, fontSize: 14),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _ctrl,
-            autofocus: true,
-            style: const TextStyle(color: Colors.white),
-            decoration: InputDecoration(
-              hintText: 'e.g. Finish the report draft…',
-              hintStyle: const TextStyle(color: Colors.white38),
-              filled: true,
-              fillColor: Colors.white.withValues(alpha: 0.07),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(12),
-                borderSide: BorderSide.none,
-              ),
-            ),
-            onSubmitted: (_) => _save(),
-            textCapitalization: TextCapitalization.sentences,
-          ),
-        ],
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.of(context).pop(),
-          child:
-              const Text('Skip', style: TextStyle(color: Colors.white38)),
-        ),
-        FilledButton(
-          onPressed: _saving ? null : _save,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.accentForHour(DateTime.now().hour),
-            shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(10)),
-          ),
-          child: _saving
-              ? const SizedBox(
-                  width: 16,
-                  height: 16,
-                  child: CircularProgressIndicator(
-                      color: Colors.white, strokeWidth: 2))
-              : const Text('Set intention'),
-        ),
-      ],
     );
   }
 }

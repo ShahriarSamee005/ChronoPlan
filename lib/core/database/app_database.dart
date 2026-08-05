@@ -9,12 +9,14 @@ import 'tables/categories_table.dart';
 import 'tables/daily_intentions_table.dart';
 import 'tables/dismissed_carves_table.dart';
 import 'tables/dismissed_suggestions_table.dart';
+import 'tables/intention_tasks_table.dart';
 import 'tables/log_entries_table.dart';
 import 'tables/routine_slots_table.dart';
 import 'tables/user_settings_table.dart';
 import 'daos/categories_dao.dart';
 import 'daos/dismissed_carves_dao.dart';
 import 'daos/dismissed_suggestions_dao.dart';
+import 'daos/intention_tasks_dao.dart';
 import 'daos/intentions_dao.dart';
 import 'daos/log_entries_dao.dart';
 import 'daos/routine_slots_dao.dart';
@@ -30,6 +32,7 @@ part 'app_database.g.dart';
     UserSettings,
     DismissedSuggestions,
     DismissedCarves,
+    IntentionTasks,
   ],
   daos: [
     CategoriesDao,
@@ -38,13 +41,14 @@ part 'app_database.g.dart';
     LogEntriesDao,
     RoutineSlotsDao,
     IntentionsDao,
+    IntentionTasksDao,
   ],
 )
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 5;
+  int get schemaVersion => 6;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -84,6 +88,10 @@ class AppDatabase extends _$AppDatabase {
           if (from < 5) {
             // Add the dismissed_carves table for Phase 2b carve-proposal dismissals.
             await m.createTable(dismissedCarves);
+          }
+          if (from < 6) {
+            // Add the intention_tasks table for the daily to-do list.
+            await m.createTable(intentionTasks);
           }
         },
       );

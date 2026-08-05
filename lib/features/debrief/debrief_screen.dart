@@ -10,12 +10,78 @@ import '../../core/theme/app_colors.dart';
 import '../../core/theme/glass_card.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/intention_tasks_provider.dart';
 import '../../providers/intentions_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../../core/ai/groq_service.dart';
 import '../../providers/settings_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
+
+/// Builds the AI debrief context prompt. Extracted as a top-level function
+/// so it's directly unit-testable without spinning up the full screen.
+String buildDebriefContextPrompt({
+  required List<LogEntry> entries,
+  required List<Category> cats,
+  required List<RoutineSlot> routine,
+  required DailyIntention? intention,
+  required List<IntentionTask> tasks,
+  required int doneTaskCount,
+  required int totalTaskCount,
+}) {
+  final today = DateTime.now();
+  final dayOfWeek = today.weekday;
+  final todayRoutine = routine
+      .where((s) => s.dayOfWeek == dayOfWeek || s.dayOfWeek == 0)
+      .toList()
+    ..sort((a, b) => a.startHour.compareTo(b.startHour));
+
+  final buf = StringBuffer();
+  buf.writeln(
+      'TODAY\'S CONTEXT — ${DateFormat('EEEE, MMMM d, y').format(today)}');
+  buf.writeln();
+  final flagged = tasks.where((t) => t.isFlagged).firstOrNull;
+  final focusText = (flagged ?? tasks.firstOrNull)?.label ?? '';
+  buf.writeln('Today\'s focus: ${focusText.isEmpty ? 'Not set' : focusText}');
+  buf.writeln('Tasks: completed $doneTaskCount of $totalTaskCount today');
+  final verdict = intention?.verdictPositive;
+  buf.writeln(
+      'Day verdict: ${verdict == null ? 'Not yet rated' : verdict ? 'Good day (👍)' : 'Tough day (👎)'}');
+  buf.writeln();
+
+  final sorted = entries.toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+  buf.writeln('LOGGED ENTRIES (${entries.length} total):');
+  if (sorted.isEmpty) {
+    buf.writeln('  No entries logged today.');
+  } else {
+    for (final e in sorted) {
+      final cat = cats.where((c) => c.id == e.categoryId).firstOrNull;
+      final start = DateFormat('HH:mm').format(e.startTime);
+      final end = DateFormat('HH:mm').format(e.endTime);
+      final mins = e.endTime.difference(e.startTime).inMinutes;
+      final desc =
+          e.description.isNotEmpty ? e.description : '(no description)';
+      buf.writeln(
+          '  $start–$end | ${cat?.name ?? 'Uncategorized'} | $desc | ${mins}min');
+    }
+  }
+
+  buf.writeln();
+  buf.writeln('ROUTINE PLAN FOR TODAY:');
+  if (todayRoutine.isEmpty) {
+    buf.writeln('  No routine set for today.');
+  } else {
+    for (final s in todayRoutine) {
+      final cat = cats.where((c) => c.id == s.categoryId).firstOrNull;
+      final endH = s.startHour + s.durationHours;
+      final label = s.label.isNotEmpty ? ' | ${s.label}' : '';
+      buf.writeln(
+          '  ${s.startHour.toString().padLeft(2, '0')}:00–${endH.toString().padLeft(2, '0')}:00'
+          ' | ${cat?.name ?? 'Unknown'}$label');
+    }
+  }
+  return buf.toString();
+}
 
 class DebriefScreen extends ConsumerStatefulWidget {
   const DebriefScreen({super.key});
@@ -39,67 +105,6 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
     _controller.dispose();
     _scrollCtrl.dispose();
     super.dispose();
-  }
-
-  String _buildContextPrompt({
-    required List<LogEntry> entries,
-    required List<Category> cats,
-    required List<RoutineSlot> routine,
-    required DailyIntention? intention,
-  }) {
-    final today = DateTime.now();
-    final dayOfWeek = today.weekday;
-    final todayRoutine = routine
-        .where((s) => s.dayOfWeek == dayOfWeek || s.dayOfWeek == 0)
-        .toList()
-      ..sort((a, b) => a.startHour.compareTo(b.startHour));
-
-    final buf = StringBuffer();
-    buf.writeln(
-        'TODAY\'S CONTEXT — ${DateFormat('EEEE, MMMM d, y').format(today)}');
-    buf.writeln();
-    final intentionText = intention?.intention.isNotEmpty == true
-        ? intention!.intention
-        : 'Not set';
-    buf.writeln('Morning intention: $intentionText');
-    final verdict = intention?.verdictPositive;
-    buf.writeln(
-        'Day verdict: ${verdict == null ? 'Not yet rated' : verdict ? 'Good day (👍)' : 'Tough day (👎)'}');
-    buf.writeln();
-
-    final sorted = entries.toList()
-      ..sort((a, b) => a.startTime.compareTo(b.startTime));
-    buf.writeln('LOGGED ENTRIES (${entries.length} total):');
-    if (sorted.isEmpty) {
-      buf.writeln('  No entries logged today.');
-    } else {
-      for (final e in sorted) {
-        final cat = cats.where((c) => c.id == e.categoryId).firstOrNull;
-        final start = DateFormat('HH:mm').format(e.startTime);
-        final end = DateFormat('HH:mm').format(e.endTime);
-        final mins = e.endTime.difference(e.startTime).inMinutes;
-        final desc =
-            e.description.isNotEmpty ? e.description : '(no description)';
-        buf.writeln(
-            '  $start–$end | ${cat?.name ?? 'Uncategorized'} | $desc | ${mins}min');
-      }
-    }
-
-    buf.writeln();
-    buf.writeln('ROUTINE PLAN FOR TODAY:');
-    if (todayRoutine.isEmpty) {
-      buf.writeln('  No routine set for today.');
-    } else {
-      for (final s in todayRoutine) {
-        final cat = cats.where((c) => c.id == s.categoryId).firstOrNull;
-        final endH = s.startHour + s.durationHours;
-        final label = s.label.isNotEmpty ? ' | ${s.label}' : '';
-        buf.writeln(
-            '  ${s.startHour.toString().padLeft(2, '0')}:00–${endH.toString().padLeft(2, '0')}:00'
-            ' | ${cat?.name ?? 'Unknown'}$label');
-      }
-    }
-    return buf.toString();
   }
 
   void _kickOff(String contextPrompt) {
@@ -200,17 +205,25 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
     final catsAsync = ref.watch(categoriesProvider);
     final routineAsync = ref.watch(allRoutineSlotsProvider);
     final intentionAsync = ref.watch(todayIntentionProvider);
+    final tasksAsync = ref.watch(dayTasksProvider);
+    final taskCountsAsync = ref.watch(taskCountsProvider);
 
     String? contextPrompt;
     if (entriesAsync.hasValue &&
         catsAsync.hasValue &&
         routineAsync.hasValue &&
-        intentionAsync.hasValue) {
-      contextPrompt = _buildContextPrompt(
+        intentionAsync.hasValue &&
+        tasksAsync.hasValue &&
+        taskCountsAsync.hasValue) {
+      final (doneCount, totalCount) = taskCountsAsync.value!;
+      contextPrompt = buildDebriefContextPrompt(
         entries: entriesAsync.value!,
         cats: catsAsync.value!,
         routine: routineAsync.value!,
         intention: intentionAsync.value,
+        tasks: tasksAsync.value!,
+        doneTaskCount: doneCount,
+        totalTaskCount: totalCount,
       );
       if (!_contextLoaded) {
         WidgetsBinding.instance.addPostFrameCallback((_) {

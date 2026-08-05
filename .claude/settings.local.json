@@ -24,7 +24,27 @@
       "Bash(taskkill //F //IM dart.exe //T)",
       "Bash(taskkill //F //IM bash.exe //T)",
       "Bash(pkill -f \"du -sh\")",
-      "Bash(timeout 10 du -h --max-depth=1 \"/c/Users/MARUF/AppData/Local\")"
+      "Bash(timeout 10 du -h --max-depth=1 \"/c/Users/MARUF/AppData/Local\")",
+      "Bash(git stash *)",
+      "Bash(rm -f test/_migration_scratch_a.dart)",
+      "Bash(powershell -Command 'Get-Process | Where-Object {$_.ProcessName -match '\\\\''dart|flutter'\\\\''} | Select-Object ProcessName, Id, CPU, StartTime')",
+      "Bash(powershell -Command \"Stop-Process -Id 21056,9360,11960,20004 -Force -ErrorAction SilentlyContinue; Write-Output done\")",
+      "Bash(powershell -Command \"Get-Process -Id 700,10872,4472 -ErrorAction SilentlyContinue | Select-Object ProcessName, Id, CPU\")",
+      "Bash(powershell -Command \"Stop-Process -Id 700,10872,4472,2364 -Force -ErrorAction SilentlyContinue; Write-Output killed\")",
+      "Bash(powershell -Command \"Get-Process -Id 7788,6376,7992 -ErrorAction SilentlyContinue | Select-Object ProcessName, Id, CPU\")",
+      "Bash(powershell -Command \"Stop-Process -Id 7788,6376,7992,21472 -Force -ErrorAction SilentlyContinue; Write-Output killed\")",
+      "Bash(timeout -k 5 90 flutter test test/intention_task_sheet_test.dart --plain-name \"adding tasks respects the 10-task cap\")",
+      "Bash(echo \"EXIT_CODE=$?\")",
+      "Bash(timeout 10 flutter test)",
+      "Bash(timeout -k 5 60 flutter test test/intention_task_sheet_test.dart --plain-name \"adding tasks respects the 10-task cap\")",
+      "Bash(timeout -k 5 120 flutter test test/intention_task_sheet_test.dart)",
+      "Bash(timeout -k 5 60 flutter test test/intention_task_sheet_test.dart)",
+      "Bash(timeout -k 5 120 flutter test)",
+      "Bash(timeout -k 5 90 flutter test test/daily_intention_card_test.dart)",
+      "Bash(timeout -k 5 60 flutter test test/debrief_context_prompt_test.dart)",
+      "Bash(timeout -k 5 90 flutter test test/carry_over_test.dart)",
+      "Bash(timeout -k 5 60 flutter test test/verdict_persistence_test.dart)",
+      "Bash(timeout -k 5 150 flutter test)"
     ]
   }
 }
