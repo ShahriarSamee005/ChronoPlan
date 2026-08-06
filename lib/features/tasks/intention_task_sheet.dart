@@ -38,8 +38,7 @@ class _IntentionTaskSheetState extends ConsumerState<IntentionTaskSheet> {
 
   @override
   Widget build(BuildContext context) {
-    final today = DateTime.now();
-    final dayKey = DateTime(today.year, today.month, today.day);
+    final dayKey = ref.watch(currentDayProvider);
     final rollForwardAsync = ref.watch(rollForwardProvider(dayKey));
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
@@ -74,7 +73,7 @@ class _IntentionTaskSheetState extends ConsumerState<IntentionTaskSheet> {
   }
 
   Widget _buildContent(BuildContext context, DateTime today) {
-    final tasksAsync = ref.watch(dayTasksProvider);
+    final tasksAsync = ref.watch(dayTasksProvider(today));
     final tasks = tasksAsync.valueOrNull ?? [];
     final atCap = tasks.length >= kMaxTasksPerDay;
 

@@ -44,7 +44,9 @@
       "Bash(timeout -k 5 60 flutter test test/debrief_context_prompt_test.dart)",
       "Bash(timeout -k 5 90 flutter test test/carry_over_test.dart)",
       "Bash(timeout -k 5 60 flutter test test/verdict_persistence_test.dart)",
-      "Bash(timeout -k 5 150 flutter test)"
+      "Bash(timeout -k 5 150 flutter test)",
+      "Bash(timeout -k 5 90 flutter test test/across_midnight_lifecycle_test.dart)",
+      "Bash(timeout -k 5 60 flutter test test/across_midnight_lifecycle_test.dart --plain-name \"resident app resumed\")"
     ]
   }
 }

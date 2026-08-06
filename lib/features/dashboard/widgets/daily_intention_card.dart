@@ -22,15 +22,14 @@ class DailyIntentionCard extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final today = DateTime.now();
-    final dayKey = DateTime(today.year, today.month, today.day);
+    final dayKey = ref.watch(currentDayProvider);
     // Same cached, day-keyed roll-forward the task sheet watches (Phase 2) —
     // the dashboard is often the only screen opened after midnight, so it
     // needs to trigger this too, not just the sheet. Riverpod caches the
     // future per day, so this doesn't duplicate the DB write if the sheet
     // has already triggered it this session (or vice versa).
     final rollForwardAsync = ref.watch(rollForwardProvider(dayKey));
-    final tasksAsync = ref.watch(dayTasksProvider);
+    final tasksAsync = ref.watch(dayTasksProvider(dayKey));
 
     if (!rollForwardAsync.hasValue) return const SizedBox.shrink();
 

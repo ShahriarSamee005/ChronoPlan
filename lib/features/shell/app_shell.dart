@@ -1,16 +1,52 @@
 import 'dart:ui';
 
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../core/theme/app_colors.dart';
+import '../../providers/intention_tasks_provider.dart';
 import '../log_entry/log_entry_sheet.dart';
 
-class AppShell extends StatelessWidget {
+/// Persists for the whole app session (created once at the ShellRoute,
+/// never popped — full-page routes like /debrief are pushed on top of it,
+/// not in place of it), which is why the across-midnight lifecycle observer
+/// lives here rather than on any individual screen.
+class AppShell extends ConsumerStatefulWidget {
   final Widget child;
   const AppShell({super.key, required this.child});
 
+  @override
+  ConsumerState<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends ConsumerState<AppShell>
+    with WidgetsBindingObserver {
   static const _routes = ['/', '/day-view', '/routine', '/history'];
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state != AppLifecycleState.resumed) return;
+    // Crossed midnight while backgrounded (resident, not killed): flip the
+    // one shared day key so every task consumer switches to the new day's
+    // providers together, instead of each drifting to "today" independently.
+    final newDay = normalizeDay(DateTime.now());
+    if (ref.read(currentDayProvider) != newDay) {
+      ref.read(currentDayProvider.notifier).state = newDay;
+    }
+  }
 
   int _locationIndex(String location) {
     final idx = _routes.indexOf(location);
@@ -29,7 +65,7 @@ class AppShell extends StatelessWidget {
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBody: true,
-      body: child,
+      body: widget.child,
       bottomNavigationBar: _GlassNavBar(
         currentIndex: currentIndex,
         onTap: (i) => _onTabTap(context, i),

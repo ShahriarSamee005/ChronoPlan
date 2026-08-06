@@ -205,8 +205,13 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
     final catsAsync = ref.watch(categoriesProvider);
     final routineAsync = ref.watch(allRoutineSlotsProvider);
     final intentionAsync = ref.watch(todayIntentionProvider);
-    final tasksAsync = ref.watch(dayTasksProvider);
-    final taskCountsAsync = ref.watch(taskCountsProvider);
+    // Task day key comes from the shared currentDayProvider (flipped by
+    // AppShell's lifecycle observer), not a locally-computed DateTime.now() —
+    // that's what the whole fix is about. Verdict/entries above are a
+    // separate, untouched path per this ticket's scope.
+    final taskDayKey = ref.watch(currentDayProvider);
+    final tasksAsync = ref.watch(dayTasksProvider(taskDayKey));
+    final taskCountsAsync = ref.watch(taskCountsProvider(taskDayKey));
 
     String? contextPrompt;
     if (entriesAsync.hasValue &&
