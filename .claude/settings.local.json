@@ -46,7 +46,10 @@
       "Bash(timeout -k 5 60 flutter test test/verdict_persistence_test.dart)",
       "Bash(timeout -k 5 150 flutter test)",
       "Bash(timeout -k 5 90 flutter test test/across_midnight_lifecycle_test.dart)",
-      "Bash(timeout -k 5 60 flutter test test/across_midnight_lifecycle_test.dart --plain-name \"resident app resumed\")"
+      "Bash(timeout -k 5 60 flutter test test/across_midnight_lifecycle_test.dart --plain-name \"resident app resumed\")",
+      "Bash(flutter --version)",
+      "Bash(grep -rhiE \"minSdkVersion|targetSdkVersion|flutterMinSdk|flutterTargetSdk|min_sdk|target_sdk\" \"F:/Flutter/flutter/packages/flutter_tools/gradle/src/main/\"*.* 2>/dev/null | grep -iE \"= *[0-9]|Integer|Version =\" | head -20)",
+      "Bash(grep -rhiE \"minSdk|targetSdk\" \"F:/Flutter/flutter/packages/flutter_tools/gradle/\" 2>/dev/null | grep -iE \"[0-9]\" | head; echo \"===\"; cat \"F:/Flutter/flutter/packages/flutter_tools/gradle/src/main/kotlin/dependency_version_checker.gradle.kts\" 2>/dev/null | grep -i sdk | head)"
     ]
   }
 }
