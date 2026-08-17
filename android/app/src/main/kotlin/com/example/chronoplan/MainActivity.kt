@@ -55,18 +55,24 @@ class MainActivity : FlutterActivity() {
     }
 
     /**
-     * Production query.  Only the five event types the Dart session-reconstruction
+     * Production query.  Only the event types the Dart session-reconstruction
      * algorithm needs are emitted; all others are silently dropped.
      *
      *  1  = MOVE_TO_FOREGROUND     → opens a foreground session for the package
      *  2  = MOVE_TO_BACKGROUND     → closes the session for that package
+     *  15 = SCREEN_INTERACTIVE     → screen on; screen-on watermark for post-unlock BGs
      *  16 = SCREEN_NON_INTERACTIVE → screen off; close whatever is currently open
      *  17 = KEYGUARD_SHOWN         → lock screen shown; close whatever is open
+     *  18 = KEYGUARD_HIDDEN        → unlocked; screen-on watermark (same role as 15)
      *  26 = DEVICE_SHUTDOWN        → device reboot; close whatever is open
      *                                (API 30+; safe to match on older API — event won't fire)
      *
-     * Events 16/17/26 carry no meaningful packageName; the Dart side treats them
-     * as a global session-break signal and ignores the "p" field.
+     * Events 15/16/17/18/26 carry no meaningful packageName; the Dart side treats
+     * them as global screen/session signals and ignores the "p" field.  15 and 18
+     * are the Phase-A screen-on watermark: they let a lone post-unlock BACKGROUND be
+     * credited from the moment the screen came on, instead of back-dated to midnight.
+     * (Both are API 28+; on 24–27 they simply never fire, and the Dart fallback drops
+     * the ambiguous BG rather than over-counting.)
      *
      * The previous code hardcoded 22 as DEVICE_SHUTDOWN — that constant is actually
      * ROLLOVER_FOREGROUND_SERVICE and was never the right event.  26 is used here
@@ -82,8 +88,10 @@ class MainActivity : FlutterActivity() {
             when (event.eventType) {
                 1,   // MOVE_TO_FOREGROUND
                 2,   // MOVE_TO_BACKGROUND
+                15,  // SCREEN_INTERACTIVE
                 16,  // SCREEN_NON_INTERACTIVE
                 17,  // KEYGUARD_SHOWN
+                18,  // KEYGUARD_HIDDEN
                 26,  // DEVICE_SHUTDOWN
                 -> events.add(mapOf(
                     "p"  to (event.packageName ?: ""),

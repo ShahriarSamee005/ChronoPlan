@@ -102,6 +102,10 @@ class _UsageDebugScreenState extends State<UsageDebugScreen> {
                 return ListView(
                   padding: const EdgeInsets.all(12),
                   children: [
+                    if (data.guardViolations.isNotEmpty) ...[
+                      _GuardViolationSection(violations: data.guardViolations),
+                      const SizedBox(height: 20),
+                    ],
                     _SectionHeader(
                       'A. RAW EVENTS (unfiltered) — ${data.rawEvents.length}',
                     ),
@@ -353,6 +357,49 @@ class _StageSummary extends StatelessWidget {
           ),
         );
       }).toList(),
+    );
+  }
+}
+
+class _GuardViolationSection extends StatelessWidget {
+  final List<UsageGuardViolation> violations;
+  const _GuardViolationSection({required this.violations});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(10),
+      decoration: BoxDecoration(
+        color: Colors.red.withValues(alpha: 0.14),
+        border: Border.all(color: Colors.redAccent, width: 1),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.warning_amber_rounded,
+                  size: 16, color: Colors.redAccent),
+              const SizedBox(width: 6),
+              Text('GUARD TRIPPED — ${violations.length} clamp(s) this hour',
+                  style: const TextStyle(
+                    color: Colors.redAccent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 13,
+                  )),
+            ],
+          ),
+          const SizedBox(height: 6),
+          ...violations.map((v) => Padding(
+                padding: const EdgeInsets.symmetric(vertical: 1),
+                child: Text(
+                  '${v.pkg}: ${v.rawMinutes}m → clamped to ${v.clampedTo}m',
+                  style: const _Mono(Colors.redAccent),
+                ),
+              )),
+        ],
+      ),
     );
   }
 }

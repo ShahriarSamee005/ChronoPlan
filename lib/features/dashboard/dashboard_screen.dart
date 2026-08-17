@@ -13,6 +13,7 @@ import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
 import 'widgets/time_gradient_background.dart';
 import '../../providers/usage_stats_provider.dart';
+import '../../providers/usage_suggestions_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -27,7 +28,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
-    _onResume();
+    // Cold start delivers no `resumed` lifecycle event, so prime _onResume
+    // here — but post-frame: it invalidates providers, and ref.invalidate
+    // needs the ProviderScope, which isn't reachable until initState returns.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _onResume();
+    });
   }
 
   @override
@@ -179,6 +185,10 @@ class _ScreenTimeCard extends ConsumerWidget {
         ? _fmtMinutes(totalMinutes)
         : 'Tap to view screen time';
 
+    final granted = ref.watch(usagePermissionProvider).valueOrNull ?? false;
+    final pending = ref.watch(usageSuggestionsProvider).valueOrNull?.length ?? 0;
+    final showBadge = granted && pending > 0;
+
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -219,6 +229,25 @@ class _ScreenTimeCard extends ConsumerWidget {
                 ],
               ),
             ),
+            if (showBadge) ...[
+              Container(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: accent.withValues(alpha: 0.20),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  '$pending',
+                  style: TextStyle(
+                    color: accent,
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+            ],
             const Icon(Icons.chevron_right_rounded,
                 color: Colors.white30, size: 20),
           ],

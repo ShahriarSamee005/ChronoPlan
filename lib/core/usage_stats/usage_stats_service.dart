@@ -181,15 +181,39 @@ class UsageStatsService {
   ///    app and a normal app switch), then opens a new session for this
   ///    package at event.timestamp.
   ///  • BACKGROUND (2) event for the package that's currently open → closes it.
-  ///  • BACKGROUND (2) event when NOTHING is open → the app must have been in
-  ///    the foreground when [windowStart] arrived; count from windowStart.
-  ///    Only applied once per package per window (a repeat is a stray/
-  ///    duplicate event, not a second implicit session).
-  ///  • BACKGROUND (2) event for a package that ISN'T the currently-open one →
-  ///    stray/duplicate event; ignored rather than risk a bogus session.
-  ///  • DEVICE_SHUTDOWN (26): closes whatever is open; time after shutdown is lost.
-  ///  • Session still open after the last event: clamp to min(now, windowEnd),
-  ///    flagged as open-ended (no closing event was ever seen).
+  ///  • BACKGROUND (2) event for a DIFFERENT open package → stray/duplicate;
+  ///    ignored, the real open session is left intact.
+  ///  • BACKGROUND (2) event when NOTHING is open (a lone unmatched BG) is
+  ///    resolved by the Phase-A priority ladder — NEVER blindly back-dated to
+  ///    windowStart, which was the over-counting bug:
+  ///      1. Screen provably ON (last screen boundary was SCREEN_INTERACTIVE
+  ///         (15) / KEYGUARD_HIDDEN (18)): credit [max(screenOnSince, lastEnd),
+  ///         BG]. The `lastEnd` floor stops it overlapping an already-emitted
+  ///         session; if the start isn't before the BG, drop.
+  ///      2. Else if this is the FIRST session-affecting event of the day (no
+  ///         prior FOREGROUND or close — the legit "already open across
+  ///         midnight" head case): credit [windowStart, BG], but only if the
+  ///         gap is ≤ 90 min; a larger gap is implausible → drop.
+  ///      3. Else (screen provably off, or unknown state after a close): drop.
+  ///  • SCREEN_NON_INTERACTIVE (16) / KEYGUARD_SHOWN (17): SUSPEND the anchored
+  ///    session (Phase B) — emit the active segment [segmentStart, t] but KEEP
+  ///    `openPkg`. The app is still the foreground app; it just isn't accruing
+  ///    while the screen is off. Marks the screen off.
+  ///  • SCREEN_INTERACTIVE (15) / KEYGUARD_HIDDEN (18): raise the screen-on
+  ///    watermark (evidence a later lone BG needs), AND resume a suspended
+  ///    anchored session by opening a fresh active segment at t. The two
+  ///    effects never collide: the watermark is only ever consumed while
+  ///    `openPkg == null`, and a resume only happens while it isn't.
+  ///  • DEVICE_SHUTDOWN (26): full close, no resume — the device is going away,
+  ///    so whatever happens after a reboot is a different session.
+  ///  • Net effect of suspend/resume: an anchored session that spans several
+  ///    screen wakes emits one contiguous sub-session per on-screen stretch;
+  ///    total credited time is the sum of on-screen time and the off-gaps
+  ///    belong to nobody.
+  ///  • Session still ACTIVE after the last event: clamp to min(now, windowEnd),
+  ///    flagged as open-ended (no closing event was ever seen). A session still
+  ///    SUSPENDED at the end contributes nothing further — its last segment was
+  ///    already emitted at the screen-off.
   ///  • A session's [start, end] is always clamped to [windowStart, windowEnd] —
   ///    it can never exceed the query window. If clamping actually changed
   ///    either edge, the session is flagged so the debug view can surface it.
@@ -200,28 +224,81 @@ class UsageStatsService {
     DateTime windowEnd,
   ) {
     final sessions = <_Session>[];
-    String? openPkg;
-    DateTime? openAt;
-    final assumedOpenAtStart = <String>{};
 
-    void closeOpen(DateTime at, {bool openEnded = false}) {
-      if (openPkg != null && openAt != null) {
+    // Phase-B anchored state:
+    //  • openPkg      — the anchored foreground package. SURVIVES a screen-off;
+    //    cleared only by a matched BG, a different app's FOREGROUND,
+    //    DEVICE_SHUTDOWN, or the end of the timeline.
+    //  • segmentStart — start of the CURRENT active segment. `null` while
+    //    openPkg is non-null means SUSPENDED: anchored but not accruing.
+    String? openPkg;
+    DateTime? segmentStart;
+
+    // Phase-A watermark/head-case state, walked in event order:
+    //  • sawAnyOpenOrClose — true once any FOREGROUND or any close has been
+    //    seen; distinguishes the legit head case from a mid-day stray BG.
+    //  • screenOn / screenOnSince — the screen-on watermark. 15/18 raise it,
+    //    16/17/26 lower it.
+    //  • lastEnd — end of the most recently emitted session; floors watermark
+    //    credit so it can never overlap an already-counted span.
+    var sawAnyOpenOrClose = false;
+    var screenOn = false;
+    DateTime? screenOnSince;
+    var lastEnd = windowStart;
+
+    /// Emits the current active segment (if the session is accruing) and marks
+    /// it suspended. Deliberately leaves `openPkg` alone — the app is still the
+    /// anchored foreground app.
+    void suspendOpen(DateTime at, {bool openEnded = false}) {
+      if (openPkg != null && segmentStart != null) {
         _addSession(
-          sessions, openPkg!, openAt!, at, windowStart, windowEnd,
+          sessions, openPkg!, segmentStart!, at, windowStart, windowEnd,
           openEnded: openEnded,
         );
+        if (at.isAfter(lastEnd)) lastEnd = at;
       }
+      segmentStart = null;
+    }
+
+    /// Emits the active segment (if any) and ends the session for good. A
+    /// session that was already suspended emits nothing more — its off-gap
+    /// tail belongs to nobody.
+    void closeOpen(DateTime at, {bool openEnded = false}) {
+      suspendOpen(at, openEnded: openEnded);
       openPkg = null;
-      openAt = null;
     }
 
     for (final e in events) {
-      // Screen-off and shutdown events have no meaningful packageName — they
-      // are global signals that whatever app was foreground has now stopped.
-      if (e.type == _kDeviceShutdown ||
-          e.type == _kScreenNonInteractive ||
-          e.type == _kKeyguardShown) {
+      // Screen-on: raise the watermark (evidence for a later lone BG), and
+      // resume a suspended anchored session with a fresh active segment.
+      // The two effects are mutually exclusive by construction — the watermark
+      // below is only ever read while openPkg == null, and a resume only fires
+      // while openPkg != null — so the same span can never be credited twice.
+      if (e.type == _kScreenInteractive || e.type == _kKeyguardHidden) {
+        screenOn = true;
+        screenOnSince = e.timestamp;
+        if (openPkg != null && segmentStart == null) {
+          segmentStart = e.timestamp;
+        }
+        continue;
+      }
+
+      // Shutdown: the device is going away. Full close — nothing after a
+      // reboot belongs to the session that was anchored before it.
+      if (e.type == _kDeviceShutdown) {
         closeOpen(e.timestamp);
+        screenOn = false;
+        sawAnyOpenOrClose = true;
+        continue;
+      }
+
+      // Screen off / lock: SUSPEND rather than close. The anchored app is
+      // still the foreground app — it simply stops accruing until the screen
+      // comes back on, so the off-gap is credited to nobody.
+      if (e.type == _kScreenNonInteractive || e.type == _kKeyguardShown) {
+        suspendOpen(e.timestamp);
+        screenOn = false;
+        sawAnyOpenOrClose = true;
         continue;
       }
 
@@ -231,26 +308,49 @@ class UsageStatsService {
         // switch) — is done as of right now.
         closeOpen(e.timestamp);
         openPkg = e.packageName;
-        openAt = e.timestamp;
+        segmentStart = e.timestamp;
+        sawAnyOpenOrClose = true;
       } else if (e.type == 2) {
         if (openPkg == e.packageName) {
           closeOpen(e.timestamp);
-        } else if (openPkg == null &&
-            assumedOpenAtStart.add(e.packageName)) {
-          // No FOREGROUND seen for anyone yet, and we haven't already
-          // assumed this package was open-since-start once already.
-          _addSession(
-            sessions, e.packageName, windowStart, e.timestamp,
-            windowStart, windowEnd,
-          );
+          sawAnyOpenOrClose = true;
+        } else if (openPkg != null) {
+          // BACKGROUND for a package that isn't the tracked one while another
+          // app is genuinely open — stray/duplicate; ignore, keep the real
+          // session intact. Do NOT back-date.
+        } else {
+          // Lone unmatched BACKGROUND (nothing open). Resolve by priority.
+          if (screenOn && screenOnSince != null) {
+            // 1. Screen provably on → credit from the watermark, floored by
+            //    lastEnd so it can't overlap an already-emitted session.
+            var start = screenOnSince;
+            if (start.isBefore(lastEnd)) start = lastEnd;
+            if (start.isBefore(e.timestamp)) {
+              _addSession(sessions, e.packageName, start, e.timestamp,
+                  windowStart, windowEnd);
+              if (e.timestamp.isAfter(lastEnd)) lastEnd = e.timestamp;
+            }
+          } else if (!sawAnyOpenOrClose) {
+            // 2. Head case: first session-affecting event of the day, so the
+            //    app was plausibly already open across midnight. Cap the
+            //    back-date at 90 min; a larger gap is implausible → drop.
+            if (e.timestamp.difference(windowStart) <=
+                const Duration(minutes: _kHeadCaseMaxBackdate)) {
+              _addSession(sessions, e.packageName, windowStart, e.timestamp,
+                  windowStart, windowEnd);
+              if (e.timestamp.isAfter(lastEnd)) lastEnd = e.timestamp;
+            }
+          }
+          // 3. else: screen provably off or unknown after a close → drop.
+          sawAnyOpenOrClose = true;
         }
-        // else: BACKGROUND for a package that isn't the tracked one —
-        // stray/duplicate event; ignore rather than risk a bogus session.
       }
     }
 
-    // Session still open after all events: clamp to min(now, windowEnd).
-    if (openPkg != null) {
+    // Still ACTIVE after all events: clamp to min(now, windowEnd). Still
+    // SUSPENDED: emit nothing — the final segment was already emitted at the
+    // screen-off, and the off-gap that followed belongs to nobody.
+    if (openPkg != null && segmentStart != null) {
       final capEnd =
           windowEnd.isAfter(DateTime.now()) ? DateTime.now() : windowEnd;
       closeOpen(capEnd, openEnded: true);
@@ -307,8 +407,9 @@ class UsageStatsService {
     List<_Session> sessions,
     DateTime dayStart,
     int maxHour, // exclusive: 0..maxHour-1 hours are reported
-    Map<String, _AppInfo> appInfo,
-  ) {
+    Map<String, _AppInfo> appInfo, {
+    List<UsageGuardViolation>? violations,
+  }) {
     final result = <int, Map<String, int>>{}; // hour → pkg → totalMinutes
 
     for (final s in sessions) {
@@ -322,6 +423,11 @@ class UsageStatsService {
         }
       }
     }
+
+    // ── Invariant guards (backstop; on correct reconstruction never fire).
+    // Clamp always applies so downstream can never exceed physical limits; the
+    // [violations] list is the observability layer surfaced in the debug view.
+    _enforceHourGuards(result, violations);
 
     var rawCount = 0, filteredNotUserFacing = 0, filteredBelowThreshold = 0, keptCount = 0;
 
@@ -356,6 +462,65 @@ class UsageStatsService {
         'filtered(belowThreshold)=$filteredBelowThreshold');
 
     return sliced;
+  }
+
+  /// Clamps the accumulated hour→pkg→minutes map so no invariant is violated,
+  /// appending a [UsageGuardViolation] for each clamp to [violations] (when
+  /// provided). Mutates [result] in place.
+  ///
+  ///  • No single (hour, package) may exceed 60 min → clamp to 60.
+  ///  • No hour's total across packages may exceed 60 min → proportionally
+  ///    scale that hour's packages down to a total of exactly 60 (largest-
+  ///    remainder rounding), after the per-package clamp.
+  ///
+  /// These should never fire on a correct reconstruction; when they do, the
+  /// clamp keeps the numbers physical and the violation makes it visible.
+  void _enforceHourGuards(
+    Map<int, Map<String, int>> result,
+    List<UsageGuardViolation>? violations,
+  ) {
+    for (final entry in result.entries) {
+      final hour = entry.key;
+      final pkgMap = entry.value;
+
+      // Guard 1: per-(hour, package) ≤ 60.
+      for (final pkg in pkgMap.keys.toList()) {
+        final raw = pkgMap[pkg]!;
+        if (raw > 60) {
+          violations?.add(UsageGuardViolation(
+            hour: hour, pkg: pkg, rawMinutes: raw, clampedTo: 60,
+          ));
+          pkgMap[pkg] = 60;
+        }
+      }
+
+      // Guard 2: hour total across packages ≤ 60 (after the per-pkg clamp).
+      final total = pkgMap.values.fold(0, (a, b) => a + b);
+      if (total > 60) {
+        violations?.add(UsageGuardViolation(
+          hour: hour, pkg: '(hour-total)', rawMinutes: total, clampedTo: 60,
+        ));
+        // Proportional scale to a total of exactly 60, largest-remainder.
+        final pkgs = pkgMap.keys.toList();
+        final floors = <String, int>{};
+        final remainders = <MapEntry<String, double>>[];
+        var used = 0;
+        for (final pkg in pkgs) {
+          final exact = pkgMap[pkg]! * 60 / total;
+          final fl = exact.floor();
+          floors[pkg] = fl;
+          used += fl;
+          remainders.add(MapEntry(pkg, exact - fl));
+        }
+        remainders.sort((a, b) => b.value.compareTo(a.value));
+        for (var i = 0; i < 60 - used && i < remainders.length; i++) {
+          floors[remainders[i].key] = floors[remainders[i].key]! + 1;
+        }
+        pkgMap
+          ..clear()
+          ..addAll(floors);
+      }
+    }
   }
 
   // ── Helpers ────────────────────────────────────────────────────────────────
@@ -432,7 +597,18 @@ class UsageStatsService {
         .toList()
       ..sort((a, b) => b.rawMinutes.compareTo(a.rawMinutes));
 
-    final hourly = await getHourlyUsage(day);
+    // Slice the full day once, capturing any guard violations, so the debug
+    // view shows both the final entries and whether the backstop tripped.
+    final isToday =
+        day.year == now.year && day.month == now.month && day.day == now.day;
+    final maxHour = isToday ? now.hour : 24;
+    final allAppInfo =
+        await _resolveAppInfo(allSessions.map((s) => s.packageName).toSet());
+    final guardViolations = <UsageGuardViolation>[];
+    final hourly = _sliceByHour(
+      allSessions, dayStart, maxHour, allAppInfo,
+      violations: guardViolations,
+    );
 
     return UsageDebugSnapshot(
       hourStart: hourStart,
@@ -441,6 +617,8 @@ class UsageStatsService {
       sessions: hourSessions,
       stages: stages,
       finalEntries: hourly[hour] ?? const [],
+      guardViolations:
+          guardViolations.where((v) => v.hour == hour).toList(growable: false),
     );
   }
 
@@ -500,6 +678,31 @@ class UsageStatsService {
               clamped: s.clamped,
             ))
         .toList();
+  }
+
+  /// Test-only entry point into [_sliceByHour] over synthetic sessions, so the
+  /// invariant guards can be exercised directly (feed deliberately overlapping
+  /// sessions and observe the clamp + recorded violations). All packages are
+  /// treated as user-facing so nothing is dropped by the userFacing filter.
+  @visibleForTesting
+  ({Map<int, List<AppUsageEntry>> buckets, List<UsageGuardViolation> violations})
+      sliceByHourForTest(
+    List<DebugSession> sessions,
+    DateTime dayStart,
+    int maxHour,
+  ) {
+    final internal = sessions
+        .map((s) => _Session(s.packageName, s.start, s.end,
+            openEnded: s.openEnded, clamped: s.clamped))
+        .toList();
+    final appInfo = {
+      for (final s in sessions)
+        s.packageName: _AppInfo(label: s.packageName, userFacing: true),
+    };
+    final violations = <UsageGuardViolation>[];
+    final buckets = _sliceByHour(internal, dayStart, maxHour, appInfo,
+        violations: violations);
+    return (buckets: buckets, violations: violations);
   }
 }
 
@@ -564,6 +767,11 @@ class UsageDebugSnapshot {
   final List<DebugFilterStage> stages;
   final List<AppUsageEntry> finalEntries;
 
+  /// Invariant-guard clamps that fired for this hour. Empty on a correct
+  /// reconstruction; non-empty means the backstop had to clamp inflated
+  /// minutes — surfaced in the debug view as a red "GUARD TRIPPED" section.
+  final List<UsageGuardViolation> guardViolations;
+
   const UsageDebugSnapshot({
     required this.hourStart,
     required this.hourEnd,
@@ -571,7 +779,30 @@ class UsageDebugSnapshot {
     required this.sessions,
     required this.stages,
     required this.finalEntries,
+    this.guardViolations = const [],
   });
+}
+
+/// A single invariant-guard clamp recorded by [UsageStatsService._sliceByHour].
+/// [pkg] is the offending package, or the sentinel `'(hour-total)'` when the
+/// clamp was on an hour's cross-package total rather than one package.
+class UsageGuardViolation {
+  final int hour;
+  final String pkg;
+  final int rawMinutes;
+  final int clampedTo;
+
+  const UsageGuardViolation({
+    required this.hour,
+    required this.pkg,
+    required this.rawMinutes,
+    required this.clampedTo,
+  });
+
+  @override
+  String toString() =>
+      'UsageGuardViolation(hour: $hour, pkg: $pkg, raw: ${rawMinutes}m → '
+      '${clampedTo}m)';
 }
 
 /// Minimum foreground minutes for an app to be considered real usage.
@@ -579,6 +810,12 @@ class UsageDebugSnapshot {
 /// card and 2b carve proposals — which both read [UsageStatsService.getHourlyUsage] —
 /// automatically agree.
 const int _minDurationMinutes = 10;
+
+/// Screen turned on / became interactive.  Phase-A screen-on watermark: a lone
+/// unmatched BACKGROUND seen while this is the most recent screen boundary is
+/// credited from here, not back-dated to midnight.  API 28+; simply absent on
+/// 24–27 (the lone BG then falls through to the drop path).
+const int _kScreenInteractive = 15;
 
 /// Screen turned off — Android does NOT reliably emit MOVE_TO_BACKGROUND for
 /// the foreground app when the display goes dark, so this event is the
@@ -588,10 +825,19 @@ const int _kScreenNonInteractive = 16;
 /// Lock screen appeared — same effect as screen-off for session accounting.
 const int _kKeyguardShown = 17;
 
+/// Keyguard dismissed (unlock).  Same screen-on watermark role as
+/// [_kScreenInteractive]; API 28+.
+const int _kKeyguardHidden = 18;
+
 /// Device shutdown/reboot.  Value 26 confirmed against Android SDK stubs.
 /// The previous Kotlin code hardcoded 22 (ROLLOVER_FOREGROUND_SERVICE —
 /// a completely different event), so shutdowns were silently ignored before.
 const int _kDeviceShutdown = 26;
+
+/// Maximum minutes a head-case lone BACKGROUND may be back-dated to
+/// [windowStart].  A larger gap is implausible as a single since-midnight
+/// session and is dropped rather than counted.
+const int _kHeadCaseMaxBackdate = 90;
 
 // ── Internal types ────────────────────────────────────────────────────────────
 

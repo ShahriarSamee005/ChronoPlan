@@ -11,15 +11,12 @@ import '../../../providers/database_provider.dart';
 /// Renders a logged entry split side-by-side with its pending carve proposal(s).
 ///
 /// Left column (58%): the existing logged entry, tappable to edit.
-/// Right column (42%): one block per pending carve proposal, each in a clearly
-/// PENDING/unconfirmed visual state (amber tint + dashed-style border).
-///
-/// Confirm shrinks the original entry and inserts the carved block.
-/// Dismiss persists the (date, hour, packageName) so the proposal never reappears.
+/// Right column (42%): pending carve proposals via [CarveActions] in inline
+/// (expanded-per-proposal) mode.
 ///
 /// This widget is placed inside the _Timeline Stack at the same Positioned
 /// coordinates as a normal entry block, so it covers the full entry time range.
-class EntryWithCarves extends ConsumerStatefulWidget {
+class EntryWithCarves extends StatelessWidget {
   final LogEntry entry;
   final List<CarveProposal> proposals;
   final List<Category> cats;
@@ -34,29 +31,9 @@ class EntryWithCarves extends ConsumerStatefulWidget {
   });
 
   @override
-  ConsumerState<EntryWithCarves> createState() => _EntryWithCarvesState();
-}
-
-class _EntryWithCarvesState extends ConsumerState<EntryWithCarves> {
-  // packageName → selected categoryId (null = none)
-  final Map<String, int?> _selectedCatId = {};
-  // packageNames with in-flight confirm requests
-  final Set<String> _confirming = {};
-
-  @override
   Widget build(BuildContext context) {
-    final screenTimeCat =
-        widget.cats.where((c) => c.name == 'Screen Time').firstOrNull;
-
-    // Default to Screen Time once cats are available; preserve any user selection.
-    if (screenTimeCat != null) {
-      for (final p in widget.proposals) {
-        _selectedCatId.putIfAbsent(p.packageName, () => screenTimeCat.id);
-      }
-    }
-
     final entryCat =
-        widget.cats.where((c) => c.id == widget.entry.categoryId).firstOrNull;
+        cats.where((c) => c.id == entry.categoryId).firstOrNull;
     final entryColor = Color(entryCat?.colorValue ?? 0xFF607D8B);
 
     return Row(
@@ -66,7 +43,7 @@ class _EntryWithCarvesState extends ConsumerState<EntryWithCarves> {
         Expanded(
           flex: 58,
           child: GestureDetector(
-            onTap: widget.onEntryTap,
+            onTap: onEntryTap,
             child: GlassCard(
               borderRadius: 8,
               opacity: 0.13,
@@ -78,10 +55,10 @@ class _EntryWithCarvesState extends ConsumerState<EntryWithCarves> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  if (widget.entry.description.isNotEmpty)
+                  if (entry.description.isNotEmpty)
                     Flexible(
                       child: Text(
-                        widget.entry.description,
+                        entry.description,
                         style: const TextStyle(
                           color: Colors.white,
                           fontSize: 10,
@@ -100,29 +77,108 @@ class _EntryWithCarvesState extends ConsumerState<EntryWithCarves> {
         // ── Pending carve proposals (right, 42%) ─────────────────────────
         Expanded(
           flex: 42,
-          child: Column(
-            children: widget.proposals
-                .map(
-                  (p) => Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(bottom: 2),
-                      child: _CarveProposalBlock(
-                        proposal: p,
-                        cats: widget.cats,
-                        selectedCatId: _selectedCatId[p.packageName],
-                        isConfirming: _confirming.contains(p.packageName),
-                        onCategoryChanged: (id) =>
-                            setState(() => _selectedCatId[p.packageName] = id),
-                        onConfirm: () => _confirm(p),
-                        onDismiss: () => _dismiss(p),
-                      ),
-                    ),
-                  ),
-                )
-                .toList(),
+          child: CarveActions(
+            entry: entry,
+            proposals: proposals,
+            cats: cats,
+            expandProposals: true,
           ),
         ),
       ],
+    );
+  }
+}
+
+// ── Shared carve controls (state + confirm/dismiss + rendering) ──────────────
+
+/// Reusable carve UI: owns the per-proposal selected-category map and the
+/// in-flight confirming set, and drives the shared confirm/dismiss logic.
+///
+/// [expandProposals] = true: inline layout, each proposal gets an equal
+/// [Expanded] slice of a bounded-height [Column] (used by [EntryWithCarves]).
+/// [expandProposals] = false: sheet layout, proposals stack at intrinsic
+/// height with a small gap between them.
+class CarveActions extends ConsumerStatefulWidget {
+  final LogEntry entry;
+  final List<CarveProposal> proposals;
+  final List<Category> cats;
+  final bool expandProposals;
+
+  const CarveActions({
+    super.key,
+    required this.entry,
+    required this.proposals,
+    required this.cats,
+    required this.expandProposals,
+  });
+
+  @override
+  ConsumerState<CarveActions> createState() => _CarveActionsState();
+}
+
+class _CarveActionsState extends ConsumerState<CarveActions> {
+  // packageName → selected categoryId (null = none)
+  final Map<String, int?> _selectedCatId = {};
+  // packageNames with in-flight confirm requests
+  final Set<String> _confirming = {};
+
+  @override
+  Widget build(BuildContext context) {
+    final screenTimeCat =
+        widget.cats.where((c) => c.name == 'Screen Time').firstOrNull;
+
+    // Default to Screen Time once cats are available; preserve any user selection.
+    if (screenTimeCat != null) {
+      for (final p in widget.proposals) {
+        _selectedCatId.putIfAbsent(p.packageName, () => screenTimeCat.id);
+      }
+    }
+
+    if (widget.expandProposals) {
+      return Column(
+        children: widget.proposals
+            .map(
+              (p) => Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: _CarveProposalBlock(
+                    proposal: p,
+                    cats: widget.cats,
+                    selectedCatId: _selectedCatId[p.packageName],
+                    isConfirming: _confirming.contains(p.packageName),
+                    onCategoryChanged: (id) =>
+                        setState(() => _selectedCatId[p.packageName] = id),
+                    onConfirm: () => _confirm(p),
+                    onDismiss: () => _dismiss(p),
+                  ),
+                ),
+              ),
+            )
+            .toList(),
+      );
+    }
+
+    // Sheet layout: intrinsic heights, 8-px gap between blocks.
+    final children = <Widget>[];
+    for (var i = 0; i < widget.proposals.length; i++) {
+      final p = widget.proposals[i];
+      children.add(_CarveProposalBlock(
+        proposal: p,
+        cats: widget.cats,
+        selectedCatId: _selectedCatId[p.packageName],
+        isConfirming: _confirming.contains(p.packageName),
+        onCategoryChanged: (id) =>
+            setState(() => _selectedCatId[p.packageName] = id),
+        onConfirm: () => _confirm(p),
+        onDismiss: () => _dismiss(p),
+      ));
+      if (i < widget.proposals.length - 1) {
+        children.add(const SizedBox(height: 8));
+      }
+    }
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: children,
     );
   }
 

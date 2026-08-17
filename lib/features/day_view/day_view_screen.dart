@@ -136,6 +136,16 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   backgroundColor: Colors.transparent,
                   builder: (_) => LogEntrySheet(existing: entry),
                 ),
+                onShortCarveTap: (entry) => showModalBottomSheet(
+                  context: context,
+                  isScrollControlled: true,
+                  useRootNavigator: true,
+                  backgroundColor: Colors.transparent,
+                  builder: (_) => _CarveSheet(
+                    entry: entry,
+                    cats: catsAsync.valueOrNull ?? [],
+                  ),
+                ),
                 onDeleteEntry: (entry) {
                   setState(() => _pendingDeleteIds.add(entry.id));
                   ref
@@ -223,6 +233,7 @@ class _Timeline extends StatelessWidget {
   final ScrollController scrollCtrl;
   final double hourPx;
   final void Function(LogEntry) onEntryTap;
+  final void Function(LogEntry) onShortCarveTap;
   final void Function(LogEntry) onDeleteEntry;
 
   const _Timeline({
@@ -235,6 +246,7 @@ class _Timeline extends StatelessWidget {
     required this.scrollCtrl,
     required this.hourPx,
     required this.onEntryTap,
+    required this.onShortCarveTap,
     required this.onDeleteEntry,
   });
 
@@ -384,7 +396,7 @@ class _Timeline extends StatelessWidget {
     final height =
         ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
 
-    if (height < 50) return _entryBlock(entry);
+    if (height < 50) return _entryBlock(entry, carveProposals: proposals);
 
     return Positioned(
       top: top + 1,
@@ -456,7 +468,8 @@ class _Timeline extends StatelessWidget {
     );
   }
 
-  Widget _entryBlock(LogEntry entry) {
+  Widget _entryBlock(LogEntry entry,
+      {List<CarveProposal> carveProposals = const []}) {
     final startMin = entry.startTime.hour * 60 + entry.startTime.minute;
     // Clamp end to midnight (1440 min) in case entry spans day boundary
     final endMin = (entry.endTime.hour * 60 + entry.endTime.minute)
@@ -467,75 +480,232 @@ class _Timeline extends StatelessWidget {
     final cat = cats.where((c) => c.id == entry.categoryId).firstOrNull;
     final color = Color(cat?.colorValue ?? 0xFF607D8B);
 
+    final base = Dismissible(
+      key: ValueKey('logentry_${entry.id}'),
+      direction:
+          isToday ? DismissDirection.endToStart : DismissDirection.none,
+      resizeDuration: null,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 12),
+        decoration: BoxDecoration(
+          color: Colors.redAccent.withValues(alpha: 0.20),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Icon(Icons.delete_outline_rounded,
+            color: Colors.redAccent, size: 18),
+      ),
+      onDismissed: (_) => onDeleteEntry(entry),
+      child: GestureDetector(
+        onTap: () => onEntryTap(entry),
+        child: GlassCard(
+        borderRadius: 8,
+        opacity: 0.13,
+        blurSigma: 6,
+        fillColor: color.withValues(alpha: 0.22),
+        borderColor: color.withValues(alpha: 0.55),
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (entry.description.isNotEmpty)
+              Flexible(
+                child: Text(
+                  entry.description,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                  ),
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            if (entry.isRealTime && height > 28)
+              Container(
+                margin: const EdgeInsets.only(top: 2),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                decoration: BoxDecoration(
+                  color: color.withValues(alpha: 0.35),
+                  borderRadius: BorderRadius.circular(3),
+                ),
+                child: Text(
+                  'LIVE',
+                  style: TextStyle(
+                    color: color,
+                    fontSize: 8,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 0.6,
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+      ),
+    );
+
+    if (carveProposals.isEmpty) {
+      return Positioned(
+        top: top + 1,
+        left: 2,
+        right: 2,
+        height: height,
+        child: base,
+      );
+    }
+
+    // Short-entry fallback: block is too short for the inline carve UI, so
+    // overlay a small amber count marker that opens the carve bottom sheet.
+    // The marker is a separate tap target — block-tap still opens the edit
+    // sheet, and swipe-to-delete on today still works on the base.
     return Positioned(
       top: top + 1,
       left: 2,
       right: 2,
       height: height,
-      child: Dismissible(
-        key: ValueKey('logentry_${entry.id}'),
-        direction:
-            isToday ? DismissDirection.endToStart : DismissDirection.none,
-        resizeDuration: null,
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.20),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.delete_outline_rounded,
-              color: Colors.redAccent, size: 18),
-        ),
-        onDismissed: (_) => onDeleteEntry(entry),
-        child: GestureDetector(
-          onTap: () => onEntryTap(entry),
-          child: GlassCard(
-          borderRadius: 8,
-          opacity: 0.13,
-          blurSigma: 6,
-          fillColor: color.withValues(alpha: 0.22),
-          borderColor: color.withValues(alpha: 0.55),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (entry.description.isNotEmpty)
-                Flexible(
-                  child: Text(
-                    entry.description,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
+      child: Stack(
+        clipBehavior: Clip.none,
+        children: [
+          base,
+          Positioned(
+            top: 2,
+            right: 2,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onTap: () => onShortCarveTap(entry),
+              child: Container(
+                width: 16,
+                height: 16,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Color(0xFFFFAB40),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '${carveProposals.length}',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.w700,
+                    height: 1.0,
                   ),
                 ),
-              if (entry.isRealTime && height > 28)
-                Container(
-                  margin: const EdgeInsets.only(top: 2),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+// ── Bottom sheet: carve controls for a short entry ───────────────────────────
+
+class _CarveSheet extends ConsumerWidget {
+  final LogEntry entry;
+  final List<Category> cats;
+
+  const _CarveSheet({required this.entry, required this.cats});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final all =
+        ref.watch(carveProposalsProvider).valueOrNull ?? const <CarveProposal>[];
+    final live = all.where((p) => p.loggedEntry.id == entry.id).toList();
+
+    final fmt = DateFormat('h:mm a');
+    final header = entry.description.isNotEmpty
+        ? entry.description
+        : '${fmt.format(entry.startTime)} – ${fmt.format(entry.endTime)}';
+
+    return SafeArea(
+      top: false,
+      child: Padding(
+        padding: EdgeInsets.only(
+          bottom: MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: GlassCard(
+          borderRadius: 24,
+          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 36,
+                  height: 4,
+                  margin: const EdgeInsets.only(bottom: 12),
                   decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(3),
+                    color: Colors.white24,
+                    borderRadius: BorderRadius.circular(2),
                   ),
-                  child: Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
+                ),
+              ),
+              const Text(
+                'SCREEN TIME CARVES',
+                style: TextStyle(
+                  color: Colors.white54,
+                  fontSize: 10,
+                  fontWeight: FontWeight.w600,
+                  letterSpacing: 1.2,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                header,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 15,
+                  fontWeight: FontWeight.w700,
+                ),
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
+              ),
+              const SizedBox(height: 14),
+              if (live.isEmpty)
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    const Padding(
+                      padding: EdgeInsets.symmetric(vertical: 6),
+                      child: Text(
+                        'All carves handled ✓',
+                        style:
+                            TextStyle(color: Colors.white70, fontSize: 13),
+                      ),
                     ),
-                  ),
+                    const SizedBox(height: 10),
+                    Align(
+                      alignment: Alignment.centerRight,
+                      child: FilledButton(
+                        onPressed: () => Navigator.of(context,
+                                rootNavigator: true)
+                            .pop(),
+                        style: FilledButton.styleFrom(
+                          backgroundColor:
+                              Colors.white.withValues(alpha: 0.14),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 20, vertical: 8),
+                        ),
+                        child: const Text('Done'),
+                      ),
+                    ),
+                  ],
+                )
+              else
+                CarveActions(
+                  entry: entry,
+                  proposals: live,
+                  cats: cats,
+                  expandProposals: false,
                 ),
             ],
           ),
-        ),
         ),
       ),
     );
