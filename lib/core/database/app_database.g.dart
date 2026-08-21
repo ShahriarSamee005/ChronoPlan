@@ -482,6 +482,16 @@ class $LogEntriesTable extends LogEntries
       defaultConstraints: GeneratedColumn.constraintIsAlways(
           'CHECK ("is_ai_parsed" IN (0, 1))'),
       defaultValue: const Constant(false));
+  static const VerificationMeta _isUsageDerivedMeta =
+      const VerificationMeta('isUsageDerived');
+  @override
+  late final GeneratedColumn<bool> isUsageDerived = GeneratedColumn<bool>(
+      'is_usage_derived', aliasedName, false,
+      type: DriftSqlType.bool,
+      requiredDuringInsert: false,
+      defaultConstraints: GeneratedColumn.constraintIsAlways(
+          'CHECK ("is_usage_derived" IN (0, 1))'),
+      defaultValue: const Constant(false));
   static const VerificationMeta _createdAtMeta =
       const VerificationMeta('createdAt');
   @override
@@ -509,6 +519,7 @@ class $LogEntriesTable extends LogEntries
         endTime,
         isRealTime,
         isAiParsed,
+        isUsageDerived,
         createdAt,
         userId,
         syncId
@@ -562,6 +573,12 @@ class $LogEntriesTable extends LogEntries
           isAiParsed.isAcceptableOrUnknown(
               data['is_ai_parsed']!, _isAiParsedMeta));
     }
+    if (data.containsKey('is_usage_derived')) {
+      context.handle(
+          _isUsageDerivedMeta,
+          isUsageDerived.isAcceptableOrUnknown(
+              data['is_usage_derived']!, _isUsageDerivedMeta));
+    }
     if (data.containsKey('created_at')) {
       context.handle(_createdAtMeta,
           createdAt.isAcceptableOrUnknown(data['created_at']!, _createdAtMeta));
@@ -597,6 +614,8 @@ class $LogEntriesTable extends LogEntries
           .read(DriftSqlType.bool, data['${effectivePrefix}is_real_time'])!,
       isAiParsed: attachedDatabase.typeMapping
           .read(DriftSqlType.bool, data['${effectivePrefix}is_ai_parsed'])!,
+      isUsageDerived: attachedDatabase.typeMapping
+          .read(DriftSqlType.bool, data['${effectivePrefix}is_usage_derived'])!,
       createdAt: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}created_at'])!,
       userId: attachedDatabase.typeMapping
@@ -620,6 +639,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
   final DateTime endTime;
   final bool isRealTime;
   final bool isAiParsed;
+  final bool isUsageDerived;
   final DateTime createdAt;
   final String? userId;
   final String? syncId;
@@ -631,6 +651,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       required this.endTime,
       required this.isRealTime,
       required this.isAiParsed,
+      required this.isUsageDerived,
       required this.createdAt,
       this.userId,
       this.syncId});
@@ -646,6 +667,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
     map['end_time'] = Variable<DateTime>(endTime);
     map['is_real_time'] = Variable<bool>(isRealTime);
     map['is_ai_parsed'] = Variable<bool>(isAiParsed);
+    map['is_usage_derived'] = Variable<bool>(isUsageDerived);
     map['created_at'] = Variable<DateTime>(createdAt);
     if (!nullToAbsent || userId != null) {
       map['user_id'] = Variable<String>(userId);
@@ -667,6 +689,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       endTime: Value(endTime),
       isRealTime: Value(isRealTime),
       isAiParsed: Value(isAiParsed),
+      isUsageDerived: Value(isUsageDerived),
       createdAt: Value(createdAt),
       userId:
           userId == null && nullToAbsent ? const Value.absent() : Value(userId),
@@ -686,6 +709,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       endTime: serializer.fromJson<DateTime>(json['endTime']),
       isRealTime: serializer.fromJson<bool>(json['isRealTime']),
       isAiParsed: serializer.fromJson<bool>(json['isAiParsed']),
+      isUsageDerived: serializer.fromJson<bool>(json['isUsageDerived']),
       createdAt: serializer.fromJson<DateTime>(json['createdAt']),
       userId: serializer.fromJson<String?>(json['userId']),
       syncId: serializer.fromJson<String?>(json['syncId']),
@@ -702,6 +726,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
       'endTime': serializer.toJson<DateTime>(endTime),
       'isRealTime': serializer.toJson<bool>(isRealTime),
       'isAiParsed': serializer.toJson<bool>(isAiParsed),
+      'isUsageDerived': serializer.toJson<bool>(isUsageDerived),
       'createdAt': serializer.toJson<DateTime>(createdAt),
       'userId': serializer.toJson<String?>(userId),
       'syncId': serializer.toJson<String?>(syncId),
@@ -716,6 +741,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           DateTime? endTime,
           bool? isRealTime,
           bool? isAiParsed,
+          bool? isUsageDerived,
           DateTime? createdAt,
           Value<String?> userId = const Value.absent(),
           Value<String?> syncId = const Value.absent()}) =>
@@ -727,6 +753,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
         endTime: endTime ?? this.endTime,
         isRealTime: isRealTime ?? this.isRealTime,
         isAiParsed: isAiParsed ?? this.isAiParsed,
+        isUsageDerived: isUsageDerived ?? this.isUsageDerived,
         createdAt: createdAt ?? this.createdAt,
         userId: userId.present ? userId.value : this.userId,
         syncId: syncId.present ? syncId.value : this.syncId,
@@ -744,6 +771,9 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           data.isRealTime.present ? data.isRealTime.value : this.isRealTime,
       isAiParsed:
           data.isAiParsed.present ? data.isAiParsed.value : this.isAiParsed,
+      isUsageDerived: data.isUsageDerived.present
+          ? data.isUsageDerived.value
+          : this.isUsageDerived,
       createdAt: data.createdAt.present ? data.createdAt.value : this.createdAt,
       userId: data.userId.present ? data.userId.value : this.userId,
       syncId: data.syncId.present ? data.syncId.value : this.syncId,
@@ -760,6 +790,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           ..write('endTime: $endTime, ')
           ..write('isRealTime: $isRealTime, ')
           ..write('isAiParsed: $isAiParsed, ')
+          ..write('isUsageDerived: $isUsageDerived, ')
           ..write('createdAt: $createdAt, ')
           ..write('userId: $userId, ')
           ..write('syncId: $syncId')
@@ -768,8 +799,18 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
   }
 
   @override
-  int get hashCode => Object.hash(id, description, categoryId, startTime,
-      endTime, isRealTime, isAiParsed, createdAt, userId, syncId);
+  int get hashCode => Object.hash(
+      id,
+      description,
+      categoryId,
+      startTime,
+      endTime,
+      isRealTime,
+      isAiParsed,
+      isUsageDerived,
+      createdAt,
+      userId,
+      syncId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -781,6 +822,7 @@ class LogEntry extends DataClass implements Insertable<LogEntry> {
           other.endTime == this.endTime &&
           other.isRealTime == this.isRealTime &&
           other.isAiParsed == this.isAiParsed &&
+          other.isUsageDerived == this.isUsageDerived &&
           other.createdAt == this.createdAt &&
           other.userId == this.userId &&
           other.syncId == this.syncId);
@@ -794,6 +836,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
   final Value<DateTime> endTime;
   final Value<bool> isRealTime;
   final Value<bool> isAiParsed;
+  final Value<bool> isUsageDerived;
   final Value<DateTime> createdAt;
   final Value<String?> userId;
   final Value<String?> syncId;
@@ -805,6 +848,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     this.endTime = const Value.absent(),
     this.isRealTime = const Value.absent(),
     this.isAiParsed = const Value.absent(),
+    this.isUsageDerived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.userId = const Value.absent(),
     this.syncId = const Value.absent(),
@@ -817,6 +861,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     required DateTime endTime,
     this.isRealTime = const Value.absent(),
     this.isAiParsed = const Value.absent(),
+    this.isUsageDerived = const Value.absent(),
     this.createdAt = const Value.absent(),
     this.userId = const Value.absent(),
     this.syncId = const Value.absent(),
@@ -830,6 +875,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     Expression<DateTime>? endTime,
     Expression<bool>? isRealTime,
     Expression<bool>? isAiParsed,
+    Expression<bool>? isUsageDerived,
     Expression<DateTime>? createdAt,
     Expression<String>? userId,
     Expression<String>? syncId,
@@ -842,6 +888,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
       if (endTime != null) 'end_time': endTime,
       if (isRealTime != null) 'is_real_time': isRealTime,
       if (isAiParsed != null) 'is_ai_parsed': isAiParsed,
+      if (isUsageDerived != null) 'is_usage_derived': isUsageDerived,
       if (createdAt != null) 'created_at': createdAt,
       if (userId != null) 'user_id': userId,
       if (syncId != null) 'sync_id': syncId,
@@ -856,6 +903,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
       Value<DateTime>? endTime,
       Value<bool>? isRealTime,
       Value<bool>? isAiParsed,
+      Value<bool>? isUsageDerived,
       Value<DateTime>? createdAt,
       Value<String?>? userId,
       Value<String?>? syncId}) {
@@ -867,6 +915,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
       endTime: endTime ?? this.endTime,
       isRealTime: isRealTime ?? this.isRealTime,
       isAiParsed: isAiParsed ?? this.isAiParsed,
+      isUsageDerived: isUsageDerived ?? this.isUsageDerived,
       createdAt: createdAt ?? this.createdAt,
       userId: userId ?? this.userId,
       syncId: syncId ?? this.syncId,
@@ -897,6 +946,9 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
     if (isAiParsed.present) {
       map['is_ai_parsed'] = Variable<bool>(isAiParsed.value);
     }
+    if (isUsageDerived.present) {
+      map['is_usage_derived'] = Variable<bool>(isUsageDerived.value);
+    }
     if (createdAt.present) {
       map['created_at'] = Variable<DateTime>(createdAt.value);
     }
@@ -919,6 +971,7 @@ class LogEntriesCompanion extends UpdateCompanion<LogEntry> {
           ..write('endTime: $endTime, ')
           ..write('isRealTime: $isRealTime, ')
           ..write('isAiParsed: $isAiParsed, ')
+          ..write('isUsageDerived: $isUsageDerived, ')
           ..write('createdAt: $createdAt, ')
           ..write('userId: $userId, ')
           ..write('syncId: $syncId')
@@ -3698,6 +3751,7 @@ typedef $$LogEntriesTableCreateCompanionBuilder = LogEntriesCompanion Function({
   required DateTime endTime,
   Value<bool> isRealTime,
   Value<bool> isAiParsed,
+  Value<bool> isUsageDerived,
   Value<DateTime> createdAt,
   Value<String?> userId,
   Value<String?> syncId,
@@ -3710,6 +3764,7 @@ typedef $$LogEntriesTableUpdateCompanionBuilder = LogEntriesCompanion Function({
   Value<DateTime> endTime,
   Value<bool> isRealTime,
   Value<bool> isAiParsed,
+  Value<bool> isUsageDerived,
   Value<DateTime> createdAt,
   Value<String?> userId,
   Value<String?> syncId,
@@ -3744,6 +3799,10 @@ class $$LogEntriesTableFilterComposer
 
   ColumnFilters<bool> get isAiParsed => $composableBuilder(
       column: $table.isAiParsed, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get isUsageDerived => $composableBuilder(
+      column: $table.isUsageDerived,
+      builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnFilters(column));
@@ -3785,6 +3844,10 @@ class $$LogEntriesTableOrderingComposer
   ColumnOrderings<bool> get isAiParsed => $composableBuilder(
       column: $table.isAiParsed, builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get isUsageDerived => $composableBuilder(
+      column: $table.isUsageDerived,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get createdAt => $composableBuilder(
       column: $table.createdAt, builder: (column) => ColumnOrderings(column));
 
@@ -3824,6 +3887,9 @@ class $$LogEntriesTableAnnotationComposer
 
   GeneratedColumn<bool> get isAiParsed => $composableBuilder(
       column: $table.isAiParsed, builder: (column) => column);
+
+  GeneratedColumn<bool> get isUsageDerived => $composableBuilder(
+      column: $table.isUsageDerived, builder: (column) => column);
 
   GeneratedColumn<DateTime> get createdAt =>
       $composableBuilder(column: $table.createdAt, builder: (column) => column);
@@ -3865,6 +3931,7 @@ class $$LogEntriesTableTableManager extends RootTableManager<
             Value<DateTime> endTime = const Value.absent(),
             Value<bool> isRealTime = const Value.absent(),
             Value<bool> isAiParsed = const Value.absent(),
+            Value<bool> isUsageDerived = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<String?> userId = const Value.absent(),
             Value<String?> syncId = const Value.absent(),
@@ -3877,6 +3944,7 @@ class $$LogEntriesTableTableManager extends RootTableManager<
             endTime: endTime,
             isRealTime: isRealTime,
             isAiParsed: isAiParsed,
+            isUsageDerived: isUsageDerived,
             createdAt: createdAt,
             userId: userId,
             syncId: syncId,
@@ -3889,6 +3957,7 @@ class $$LogEntriesTableTableManager extends RootTableManager<
             required DateTime endTime,
             Value<bool> isRealTime = const Value.absent(),
             Value<bool> isAiParsed = const Value.absent(),
+            Value<bool> isUsageDerived = const Value.absent(),
             Value<DateTime> createdAt = const Value.absent(),
             Value<String?> userId = const Value.absent(),
             Value<String?> syncId = const Value.absent(),
@@ -3901,6 +3970,7 @@ class $$LogEntriesTableTableManager extends RootTableManager<
             endTime: endTime,
             isRealTime: isRealTime,
             isAiParsed: isAiParsed,
+            isUsageDerived: isUsageDerived,
             createdAt: createdAt,
             userId: userId,
             syncId: syncId,

@@ -14,6 +14,10 @@ class LogEntries extends Table {
   // True when AI parsed the description into this entry
   BoolColumn get isAiParsed =>
       boolean().withDefault(const Constant(false))();
+  // True when this row came from an OS screen-time confirm/carve, not a user
+  // log. Used by reconciliation to keep suggestions/missing-hours user-driven.
+  BoolColumn get isUsageDerived =>
+      boolean().withDefault(const Constant(false))();
   DateTimeColumn get createdAt =>
       dateTime().clientDefault(() => DateTime.now())();
   TextColumn get userId => text().nullable()();

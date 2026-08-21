@@ -73,20 +73,49 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
         syncId: Value(_uuid.v4()),
       ));
 
-  /// Retroactive entry — auto-splits around any existing real-time entries
-  /// in the requested window, filling only the empty gaps.
-  /// Returns the IDs of rows created (empty list = window fully blocked).
-  Future<List<int>> insertRetroactive({
+  /// Retroactive entry — auto-splits around any existing blocking entries in
+  /// the requested window, filling only the empty gaps.
+  ///
+  /// Returns the rows created plus how much of the request was satisfied, so
+  /// callers can tell FULL from PARTIAL from NONE:
+  ///   • `writtenMinutes == requestedMinutes` → the whole window was written
+  ///   • `0 < writtenMinutes < requestedMinutes` → it slotted around blockers
+  ///   • `writtenMinutes == 0` (and `ids` empty) → fully blocked, nothing written
+  ///
+  /// [isUsageDerived] tags the row as OS-screen-time origin (confirm/carve).
+  /// Defaults to false so the manual-log path is unaffected.
+  ///
+  /// [avoidUsageDerived] additionally treats existing screen-time rows as
+  /// blockers, so a manual log fills around confirmed screen time instead of
+  /// stacking on top of it. Defaults to false: every other caller keeps today's
+  /// behavior, where only real-time entries block.
+  Future<({List<int> ids, int requestedMinutes, int writtenMinutes})>
+      insertRetroactive({
     required DateTime startTime,
     required DateTime endTime,
     required int? categoryId,
     required String description,
+    bool isUsageDerived = false,
+    bool avoidUsageDerived = false,
   }) async {
-    final blockers = await _realTimeBlockers(startTime, endTime);
+    final requestedMinutes = endTime.difference(startTime).inMinutes;
+
+    final blockers = await _blockers(
+      startTime,
+      endTime,
+      avoidUsageDerived: avoidUsageDerived,
+    );
     final gaps = _gaps(startTime, endTime, blockers);
-    if (gaps.isEmpty) return [];
+    if (gaps.isEmpty) {
+      return (
+        ids: const <int>[],
+        requestedMinutes: requestedMinutes,
+        writtenMinutes: 0,
+      );
+    }
 
     final ids = <int>[];
+    var writtenMinutes = 0;
     for (final (gapStart, gapEnd) in gaps) {
       final id = await into(logEntries).insert(LogEntriesCompanion.insert(
         startTime: gapStart,
@@ -94,11 +123,17 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
         categoryId: Value(categoryId),
         description: Value(description),
         isRealTime: const Value(false),
+        isUsageDerived: Value(isUsageDerived),
         syncId: Value(_uuid.v4()),
       ));
       ids.add(id);
+      writtenMinutes += gapEnd.difference(gapStart).inMinutes;
     }
-    return ids;
+    return (
+      ids: ids,
+      requestedMinutes: requestedMinutes,
+      writtenMinutes: writtenMinutes,
+    );
   }
 
   // ── Mutations ────────────────────────────────────────────────────────────
@@ -114,15 +149,26 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
 
   DateTime _dayStart(DateTime d) => DateTime(d.year, d.month, d.day);
 
-  Future<List<LogEntry>> _realTimeBlockers(
+  /// Existing entries that block part of [start, end].
+  ///
+  /// Real-time entries are always sacred. [avoidUsageDerived] widens the set to
+  /// include OS screen-time rows as well — parenthesized so the OR groups
+  /// before the overlap terms are ANDed on.
+  Future<List<LogEntry>> _blockers(
     DateTime start,
-    DateTime end,
-  ) =>
+    DateTime end, {
+    required bool avoidUsageDerived,
+  }) =>
       (select(logEntries)
-            ..where((e) =>
-                e.isRealTime.equals(true) &
-                e.startTime.isSmallerThanValue(end) &
-                e.endTime.isBiggerThanValue(start))
+            ..where((e) {
+              final blocks = avoidUsageDerived
+                  ? (e.isRealTime.equals(true) |
+                      e.isUsageDerived.equals(true))
+                  : e.isRealTime.equals(true);
+              return blocks &
+                  e.startTime.isSmallerThanValue(end) &
+                  e.endTime.isBiggerThanValue(start);
+            })
             ..orderBy([(e) => OrderingTerm(expression: e.startTime)]))
           .get();
 

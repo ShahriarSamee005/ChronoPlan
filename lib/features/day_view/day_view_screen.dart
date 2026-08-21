@@ -569,7 +569,12 @@ class _Timeline extends StatelessWidget {
       child: Stack(
         clipBehavior: Clip.none,
         children: [
-          base,
+          // Positioned.fill gives `base` tight parent-size constraints so its
+          // Dismissible/GestureDetector cover the whole block — otherwise
+          // Stack's default loose fit lets `base` shrink to its content and
+          // taps outside the marker fall through instead of opening the edit
+          // sheet.
+          Positioned.fill(child: base),
           Positioned(
             top: 2,
             right: 2,

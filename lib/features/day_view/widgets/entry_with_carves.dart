@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/database/app_database.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/glass_card.dart';
+import '../../../core/usage_stats/carve_planner.dart';
 import '../../../core/usage_stats/carve_proposal.dart';
 import '../../../providers/database_provider.dart';
 
@@ -191,54 +192,55 @@ class _CarveActionsState extends ConsumerState<CarveActions> {
       // have already shrunk it, so we must not use the stale proposal snapshot.
       final current = await db.logEntriesDao.getById(proposal.loggedEntry.id);
       if (current == null) {
-        _showSnack('Entry was already fully carved.');
+        _showSnack('That entry no longer exists.');
         return;
       }
 
-      final entryDuration =
-          current.endTime.difference(current.startTime).inMinutes;
-      final carveMinutes = proposal.durationMinutes.clamp(0, entryDuration);
-
-      if (carveMinutes <= 0) {
-        _showSnack('Nothing left to carve from this entry.');
+      if (proposal.durationMinutes <= 0) {
+        _showSnack('Nothing to add for this app.');
         return;
       }
 
       final catId = _selectedCatId[proposal.packageName];
 
-      // Carve M minutes from the END of the current entry.
-      // Placement within the hour is approximate — queryEvents gives us total
+      // The screen time goes into the hour's EMPTY space — the logged entry is
+      // only trimmed (from its end, never below 1 min) when the hour would
+      // otherwise exceed 60. It is never moved, repurposed, or erased.
+      // Placement within each gap is approximate — queryEvents gives us total
       // session duration in the bucket, not where in the hour it occurred.
-      final carveStart =
-          current.endTime.subtract(Duration(minutes: carveMinutes));
-      final carveEnd = current.endTime;
+      final hourStart = DateTime(
+        current.startTime.year,
+        current.startTime.month,
+        current.startTime.day,
+        current.startTime.hour,
+      );
+      final plan = planCarve(
+        entryStart: current.startTime,
+        entryEnd: current.endTime,
+        hourStart: hourStart,
+        screenMinutes: proposal.durationMinutes,
+      );
 
-      if (carveMinutes >= entryDuration) {
-        // Entry is fully consumed — repurpose it as the carved entry rather
-        // than deleting and re-inserting to preserve the row ID.
+      // Shrink the entry first so the freed minutes are actually free.
+      if (plan.newEntryEnd != current.endTime) {
         await db.logEntriesDao.updateEntry(LogEntriesCompanion(
           id: Value(current.id),
-          categoryId: Value(catId),
-          description: Value(proposal.appLabel),
-          startTime: Value(carveStart),
-          endTime: Value(carveEnd),
+          endTime: Value(plan.newEntryEnd),
         ));
-      } else {
-        // Shrink the original entry first so the carved slot is free.
-        await db.logEntriesDao.updateEntry(LogEntriesCompanion(
-          id: Value(current.id),
-          endTime: Value(carveStart),
-        ));
-        // Insert the carved block through the normal retroactive path.
+      }
+      // Insert each screen-time block through the normal retroactive path.
+      for (final (blockStart, blockEnd) in plan.screenBlocks) {
         await db.logEntriesDao.insertRetroactive(
-          startTime: carveStart,
-          endTime: carveEnd,
+          startTime: blockStart,
+          endTime: blockEnd,
           categoryId: catId,
           description: proposal.appLabel,
+          isUsageDerived: true,
         );
       }
       // The logEntriesForDayProvider stream auto-updates → _Timeline rebuilds
-      // → the bucket now has two entries → carveProposalsProvider drops it.
+      // → the bucket now holds more than one entry → carveProposalsProvider
+      // drops it.
     } catch (e) {
       _showSnack('Could not confirm: $e');
     } finally {

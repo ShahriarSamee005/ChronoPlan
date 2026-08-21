@@ -129,13 +129,16 @@ class _UsageSuggestionsCardState extends ConsumerState<UsageSuggestionsCard> {
     try {
       // Goes through insertRetroactive so sacred real-time entries are never
       // overwritten and auto-split rules apply.
-      final ids = await db.logEntriesDao.insertRetroactive(
+      // Record only the minutes actually detected, anchored to the top of the
+      // hour — the rest of the hour stays free for the user to log by hand.
+      final result = await db.logEntriesDao.insertRetroactive(
         startTime: s.bucketStart,
-        endTime: s.bucketEnd,
+        endTime: s.bucketStart.add(Duration(minutes: s.totalMinutes)),
         categoryId: _selectedCategory[s.hour],
         description: s.description,
+        isUsageDerived: true,
       );
-      if (mounted && ids.isEmpty) {
+      if (mounted && result.writtenMinutes == 0) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text('That window is already fully logged.'),
@@ -143,10 +146,10 @@ class _UsageSuggestionsCardState extends ConsumerState<UsageSuggestionsCard> {
           ),
         );
       }
-      // Whether ids is empty or not, the bucket is now "handled":
-      // todayEntriesProvider stream will update → suggestion auto-disappears
-      // if ids is non-empty; if ids is empty, it means a real-time entry
-      // already covers it, so the overlap check will also hide it.
+      // Either way the bucket is now "handled": todayEntriesProvider stream
+      // will update → the suggestion auto-disappears when something was
+      // written; when nothing was, a real-time entry already covers the hour,
+      // so the overlap check hides it too.
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(

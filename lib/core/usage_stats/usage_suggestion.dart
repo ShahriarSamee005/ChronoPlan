@@ -19,10 +19,19 @@ class UsageSuggestion {
   /// names — full display-name resolution is a later enhancement.
   final String description;
 
+  /// Total detected foreground minutes in this bucket, across all kept apps.
+  ///
+  /// Guaranteed <= 60: `UsageStatsService._enforceHourGuards` scales each
+  /// hour's cross-package total down to 60 before the per-app entries are
+  /// built, and the later filters only remove minutes. Confirm writes a block
+  /// of exactly this length so the rest of the hour stays free for a hand log.
+  final int totalMinutes;
+
   const UsageSuggestion({
     required this.hour,
     required this.bucketStart,
     required this.bucketEnd,
     required this.description,
+    required this.totalMinutes,
   });
 }

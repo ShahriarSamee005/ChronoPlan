@@ -67,7 +67,11 @@ final usageSuggestionsProvider =
     final bucketStart = today.add(Duration(hours: hour));
     final bucketEnd = bucketStart.add(const Duration(hours: 1));
 
-    // Same overlap test used by _computeMissedHours in log_entry_sheet.dart.
+    // Any existing entry hides the suggestion, whatever its origin — including
+    // a screen-time row this card wrote earlier, which is what stops a
+    // confirmed hour from being re-offered. (computeMissedHours in
+    // log_entry_sheet.dart deliberately differs: it skips isUsageDerived rows,
+    // so an hour holding only screen time still reads as un-logged there.)
     final hasEntry = entries.any(
       (e) => e.startTime.isBefore(bucketEnd) && e.endTime.isAfter(bucketStart),
     );
@@ -89,6 +93,7 @@ final usageSuggestionsProvider =
       bucketStart: bucketStart,
       bucketEnd: bucketEnd,
       description: topApps,
+      totalMinutes: totalMinutes,
     ));
   }
 

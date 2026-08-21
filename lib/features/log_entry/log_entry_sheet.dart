@@ -14,6 +14,33 @@ import '../../providers/database_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/settings_provider.dart';
 
+/// Elapsed hours of today that hold no USER-logged activity, for the
+/// missing-hours quick-pick strip.
+///
+/// Screen-time rows (`isUsageDerived == true`) do NOT count as covering an
+/// hour: confirming OS screen time is not the same as the user accounting for
+/// their own time, so such an hour stays "missed" until they log it themselves.
+///
+/// [now] defaults to `DateTime.now()`; only hours strictly before `now.hour`
+/// are considered, so the in-progress hour is never reported.
+List<int> computeMissedHours(List<LogEntry> entries, {DateTime? now}) {
+  final reference = now ?? DateTime.now();
+  final today = DateTime(reference.year, reference.month, reference.day);
+  final missed = <int>[];
+  for (int h = 0; h < reference.hour; h++) {
+    final slotStart = today.add(Duration(hours: h));
+    final slotEnd = slotStart.add(const Duration(hours: 1));
+    final covered = entries.any(
+      (e) =>
+          !e.isUsageDerived &&
+          e.startTime.isBefore(slotEnd) &&
+          e.endTime.isAfter(slotStart),
+    );
+    if (!covered) missed.add(h);
+  }
+  return missed;
+}
+
 class LogEntrySheet extends ConsumerStatefulWidget {
   final LogEntry? existing;
 
@@ -80,7 +107,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
     final missedHours =
-        widget.existing == null ? _computeMissedHours(todayEntries) : <int>[];
+        widget.existing == null ? computeMissedHours(todayEntries) : <int>[];
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
@@ -299,21 +326,6 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     );
   }
 
-  List<int> _computeMissedHours(List<LogEntry> entries) {
-    final now = DateTime.now();
-    final today = DateTime(now.year, now.month, now.day);
-    final missed = <int>[];
-    for (int h = 0; h < now.hour; h++) {
-      final slotStart = today.add(Duration(hours: h));
-      final slotEnd = slotStart.add(const Duration(hours: 1));
-      final covered = entries.any(
-        (e) => e.startTime.isBefore(slotEnd) && e.endTime.isAfter(slotStart),
-      );
-      if (!covered) missed.add(h);
-    }
-    return missed;
-  }
-
   String _fmt(DateTime dt) => DateFormat('h:mm a').format(dt);
 
   Future<void> _pickTime({required bool isStart}) async {
@@ -370,14 +382,21 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
           ),
         );
       } else {
-        final ids = await db.logEntriesDao.insertRetroactive(
+        // avoidUsageDerived: the log fills only the empty space, slotting
+        // around any confirmed screen time rather than stacking on it.
+        final result = await db.logEntriesDao.insertRetroactive(
           startTime: _startTime,
           endTime: _endTime,
           categoryId: _selectedCategoryId,
           description: _descCtrl.text.trim(),
+          avoidUsageDerived: true,
         );
-        if (mounted && ids.isEmpty) {
-          _showSnack('That window is fully covered — nothing added.');
+        // A partial fit is success — the log slotted in around the screen time.
+        // Only a total block is worth stopping for, and then the sheet stays
+        // open so the user doesn't lose what they typed.
+        if (mounted && result.writtenMinutes == 0) {
+          _showSnack(
+              'That window is fully covered by screen time — nothing added.');
           return;
         }
       }

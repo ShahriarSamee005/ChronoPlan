@@ -48,7 +48,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 6;
+  int get schemaVersion => 7;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -92,6 +92,11 @@ class AppDatabase extends _$AppDatabase {
           if (from < 6) {
             // Add the intention_tasks table for the daily to-do list.
             await m.createTable(intentionTasks);
+          }
+          if (from < 7) {
+            // Add is_usage_derived to log_entries so reconciliation can tell
+            // OS-derived screen-time rows apart from user log entries.
+            await m.addColumn(logEntries, logEntries.isUsageDerived);
           }
         },
       );

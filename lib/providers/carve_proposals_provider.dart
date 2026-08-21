@@ -23,7 +23,9 @@ final _dismissedCarvesTodayProvider = StreamProvider<List<DismissedCarve>>((ref)
 ///
 /// A carve proposal is generated for an elapsed hour bucket when:
 ///   1. Exactly ONE logged entry is fully contained within the bucket
-///      (entry.startTime >= bucketStart && entry.endTime <= bucketEnd).
+///      (entry.startTime >= bucketStart && entry.endTime <= bucketEnd), and it
+///      is user-origin — a screen-time row (isUsageDerived) is never a carve
+///      target, since there is nothing to reattribute out of it.
 ///      Buckets with zero entries are handled by Phase 2a (empty-bucket card).
 ///      Buckets with >1 entries are skipped — multi-entry carving is future scope.
 ///   2. An app has >= 10 minutes of foreground usage in that bucket.
@@ -75,6 +77,9 @@ final carveProposalsProvider =
         .toList();
 
     if (bucketEntries.length != 1) continue;
+    // Never carve a screen-time block: it is already OS-derived, so there is
+    // nothing to reattribute, and trimming it would falsify the record.
+    if (bucketEntries.first.isUsageDerived) continue;
     final loggedEntry = bucketEntries.first;
 
     final apps = hourly[h] ?? [];
@@ -95,9 +100,10 @@ final carveProposalsProvider =
 
       if (dismissedSet.contains('$h:${app.packageName}')) { continue; }
 
-      // Cap so the sum of all carves for this entry can't exceed its duration.
-      // Individual caps are approximate; the confirm path re-checks live duration.
-      final cappedMinutes = app.durationMinutes.clamp(0, entryDurationMinutes);
+      // Cap against the hour, not the entry: the confirm path places the FULL
+      // detected minutes in the hour's empty space and only trims the logged
+      // entry if the hour would exceed 60 (see planCarve).
+      final cappedMinutes = app.durationMinutes.clamp(0, 60);
       if (cappedMinutes <= 0) { continue; }
 
       proposals.add(CarveProposal(
