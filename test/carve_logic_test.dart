@@ -1,45 +1,32 @@
 import 'dart:ffi';
 
 import 'package:chronoplan/core/database/app_database.dart';
-import 'package:chronoplan/core/usage_stats/carve_planner.dart';
-import 'package:drift/drift.dart';
+import 'package:chronoplan/core/usage_stats/carve_actions.dart';
+import 'package:chronoplan/core/usage_stats/carve_proposal.dart';
 import 'package:drift/native.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:sqlite3/open.dart';
 
-/// Mirrors the DB writes in `CarveActions._confirm`: shrink the entry only if
-/// planCarve trimmed it, then insert each screen-time block.
-Future<void> applyCarve({
-  required AppDatabase db,
-  required LogEntry current,
-  required DateTime hourStart,
+/// Drives the REAL carve confirm path (`applyCarve` → planCarve → shrink +
+/// insert) — the same code the dashboard card's Confirm button runs.
+Future<CarveOutcome> carve(
+  AppDatabase db,
+  LogEntry current, {
   required int screenMinutes,
   required int? screenCatId,
   required String appLabel,
-}) async {
-  final plan = planCarve(
-    entryStart: current.startTime,
-    entryEnd: current.endTime,
-    hourStart: hourStart,
-    screenMinutes: screenMinutes,
-  );
-
-  if (plan.newEntryEnd != current.endTime) {
-    await db.logEntriesDao.updateEntry(LogEntriesCompanion(
-      id: Value(current.id),
-      endTime: Value(plan.newEntryEnd),
-    ));
-  }
-  for (final (blockStart, blockEnd) in plan.screenBlocks) {
-    await db.logEntriesDao.insertRetroactive(
-      startTime: blockStart,
-      endTime: blockEnd,
+}) =>
+    applyCarve(
+      db: db,
+      proposal: CarveProposal(
+        hour: current.startTime.hour,
+        loggedEntry: current,
+        packageName: 'com.example.${appLabel.toLowerCase()}',
+        appLabel: appLabel,
+        durationMinutes: screenMinutes,
+      ),
       categoryId: screenCatId,
-      description: appLabel,
-      isUsageDerived: true,
     );
-  }
-}
 
 void main() {
   open.overrideFor(
@@ -77,10 +64,9 @@ void main() {
         await setUpDb(entryStart: hourStart, entryEnd: hourEnd);
 
     final current = await db.logEntriesDao.getById(entryId);
-    await applyCarve(
-      db: db,
-      current: current!,
-      hourStart: hourStart,
+    await carve(
+      db,
+      current!,
       screenMinutes: 13,
       screenCatId: screenTimeCatId,
       appLabel: 'YouTube',
@@ -105,10 +91,9 @@ void main() {
 
     // The provider caps at 60; exercise the over-limit value end-to-end anyway.
     final current = await db.logEntriesDao.getById(entryId);
-    await applyCarve(
-      db: db,
-      current: current!,
-      hourStart: hourStart,
+    await carve(
+      db,
+      current!,
       screenMinutes: 70,
       screenCatId: screenTimeCatId,
       appLabel: 'YouTube',
@@ -132,10 +117,9 @@ void main() {
         await setUpDb(entryStart: hourStart, entryEnd: entryEnd);
 
     final current = await db.logEntriesDao.getById(entryId);
-    await applyCarve(
-      db: db,
-      current: current!,
-      hourStart: hourStart,
+    await carve(
+      db,
+      current!,
       screenMinutes: 30,
       screenCatId: screenTimeCatId,
       appLabel: 'YouTube',
@@ -161,10 +145,9 @@ void main() {
         await setUpDb(entryStart: entryStart, entryEnd: entryEnd);
 
     final current = await db.logEntriesDao.getById(entryId);
-    await applyCarve(
-      db: db,
-      current: current!,
-      hourStart: hourStart,
+    await carve(
+      db,
+      current!,
       screenMinutes: 30,
       screenCatId: screenTimeCatId,
       appLabel: 'YouTube',

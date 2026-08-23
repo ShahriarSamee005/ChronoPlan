@@ -12,8 +12,8 @@ import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
 import 'widgets/time_gradient_background.dart';
+import '../../providers/pending_reconciliation_provider.dart';
 import '../../providers/usage_stats_provider.dart';
-import '../../providers/usage_suggestions_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -124,8 +124,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_outline_rounded,
-                color: Colors.white),
+            icon: const Icon(Icons.person_outline_rounded, color: Colors.white),
             tooltip: 'Profile',
             onPressed: () => context.push('/profile'),
           ),
@@ -178,15 +177,16 @@ class _ScreenTimeCard extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final accent = AppColors.accentForHour(DateTime.now().hour);
     final usageAsync = ref.watch(todayUsageProvider);
-    final totalMinutes = usageAsync.valueOrNull
-            ?.fold(0, (s, a) => s + a.durationMinutes) ??
-        0;
+    final totalMinutes =
+        usageAsync.valueOrNull?.fold(0, (s, a) => s + a.durationMinutes) ?? 0;
     final subtitle = totalMinutes > 0
         ? _fmtMinutes(totalMinutes)
         : 'Tap to view screen time';
 
     final granted = ref.watch(usagePermissionProvider).valueOrNull ?? false;
-    final pending = ref.watch(usageSuggestionsProvider).valueOrNull?.length ?? 0;
+    // Empty-hour suggestions AND logged hours with pending carves — the same
+    // number the suggestions card shows in its header.
+    final pending = ref.watch(pendingReconciliationCountProvider);
     final showBadge = granted && pending > 0;
 
     return GestureDetector(
@@ -231,8 +231,7 @@ class _ScreenTimeCard extends ConsumerWidget {
             ),
             if (showBadge) ...[
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                 decoration: BoxDecoration(
                   color: accent.withValues(alpha: 0.20),
                   borderRadius: BorderRadius.circular(10),

@@ -5,14 +5,12 @@ import 'package:intl/intl.dart';
 
 import '../../core/database/app_database.dart';
 import '../../core/theme/glass_card.dart';
-import '../../providers/carve_proposals_provider.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../log_entry/log_entry_sheet.dart';
-import 'widgets/entry_with_carves.dart';
 
 class DayViewScreen extends ConsumerStatefulWidget {
   final DateTime? initialDate;
@@ -76,11 +74,6 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         .where((s) => s.dayOfWeek == dayOfWeek || s.dayOfWeek == 0)
         .toList();
 
-    // Carve proposals are today-only — no historical usage data is available.
-    final carveProposals = _isToday
-        ? (ref.watch(carveProposalsProvider).valueOrNull ?? <CarveProposal>[])
-        : <CarveProposal>[];
-
     return Scaffold(
       backgroundColor: Colors.transparent,
       extendBodyBehindAppBar: true,
@@ -91,8 +84,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         automaticallyImplyLeading: false,
         leading: context.canPop()
             ? IconButton(
-                icon: const Icon(Icons.arrow_back_rounded,
-                    color: Colors.white),
+                icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
                 onPressed: () => context.pop(),
               )
             : null,
@@ -105,8 +97,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         centerTitle: true,
         actions: [
           IconButton(
-            icon: const Icon(Icons.person_outline_rounded,
-                color: Colors.white),
+            icon: const Icon(Icons.person_outline_rounded, color: Colors.white),
             onPressed: () => context.push('/profile'),
           ),
         ],
@@ -115,8 +106,8 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
         child: SafeArea(
           child: entriesAsync.when(
             data: (entries) {
-              _pendingDeleteIds.removeWhere(
-                  (id) => !entries.any((e) => e.id == id));
+              _pendingDeleteIds
+                  .removeWhere((id) => !entries.any((e) => e.id == id));
               final visible = entries
                   .where((e) => !_pendingDeleteIds.contains(e.id))
                   .toList();
@@ -125,7 +116,6 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                 entries: visible,
                 cats: catsAsync.valueOrNull ?? [],
                 routineSlots: todaySlots,
-                carveProposals: carveProposals,
                 isToday: _isToday,
                 scrollCtrl: _scrollCtrl,
                 hourPx: _hourPx,
@@ -136,16 +126,6 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   backgroundColor: Colors.transparent,
                   builder: (_) => LogEntrySheet(existing: entry),
                 ),
-                onShortCarveTap: (entry) => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  useRootNavigator: true,
-                  backgroundColor: Colors.transparent,
-                  builder: (_) => _CarveSheet(
-                    entry: entry,
-                    cats: catsAsync.valueOrNull ?? [],
-                  ),
-                ),
                 onDeleteEntry: (entry) {
                   setState(() => _pendingDeleteIds.add(entry.id));
                   ref
@@ -155,11 +135,9 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                 },
               );
             },
-            loading: () =>
-                const Center(child: CircularProgressIndicator()),
+            loading: () => const Center(child: CircularProgressIndicator()),
             error: (e, _) => Center(
-              child: Text('$e',
-                  style: const TextStyle(color: Colors.white54)),
+              child: Text('$e', style: const TextStyle(color: Colors.white54)),
             ),
           ),
         ),
@@ -186,11 +164,9 @@ class _DateNav extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final now = DateTime.now();
-    final isToday = date.year == now.year &&
-        date.month == now.month &&
-        date.day == now.day;
-    final label =
-        isToday ? 'Today' : DateFormat('EEE, MMM d').format(date);
+    final isToday =
+        date.year == now.year && date.month == now.month && date.day == now.day;
+    final label = isToday ? 'Today' : DateFormat('EEE, MMM d').format(date);
 
     return Row(
       mainAxisSize: MainAxisSize.min,
@@ -228,12 +204,10 @@ class _Timeline extends StatelessWidget {
   final List<LogEntry> entries;
   final List<Category> cats;
   final List<RoutineSlot> routineSlots;
-  final List<CarveProposal> carveProposals;
   final bool isToday;
   final ScrollController scrollCtrl;
   final double hourPx;
   final void Function(LogEntry) onEntryTap;
-  final void Function(LogEntry) onShortCarveTap;
   final void Function(LogEntry) onDeleteEntry;
 
   const _Timeline({
@@ -241,12 +215,10 @@ class _Timeline extends StatelessWidget {
     required this.entries,
     required this.cats,
     required this.routineSlots,
-    required this.carveProposals,
     required this.isToday,
     required this.scrollCtrl,
     required this.hourPx,
     required this.onEntryTap,
-    required this.onShortCarveTap,
     required this.onDeleteEntry,
   });
 
@@ -290,36 +262,33 @@ class _Timeline extends StatelessWidget {
               child: Stack(
                 children: [
                   // Hour dividers
-                  ...List.generate(24, (h) => Positioned(
-                    top: h * hourPx,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 0.5,
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
-                  )),
+                  ...List.generate(
+                      24,
+                      (h) => Positioned(
+                            top: h * hourPx,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 0.5,
+                              color: Colors.white.withValues(alpha: 0.10),
+                            ),
+                          )),
                   // Half-hour dividers
-                  ...List.generate(24, (h) => Positioned(
-                    top: h * hourPx + hourPx / 2,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 0.5,
-                      color: Colors.white.withValues(alpha: 0.04),
-                    ),
-                  )),
+                  ...List.generate(
+                      24,
+                      (h) => Positioned(
+                            top: h * hourPx + hourPx / 2,
+                            left: 0,
+                            right: 0,
+                            child: Container(
+                              height: 0.5,
+                              color: Colors.white.withValues(alpha: 0.04),
+                            ),
+                          )),
                   // Routine ghost blocks (behind real entries)
                   ...routineSlots.map((s) => _ghostBlock(s)),
-                  // Entry blocks — rendered with pending carve proposals when present.
-                  ...entries.map((entry) {
-                    final proposals = carveProposals
-                        .where((p) => p.loggedEntry.id == entry.id)
-                        .toList();
-                    return proposals.isNotEmpty
-                        ? _entryBlockWithCarves(entry, proposals)
-                        : _entryBlock(entry);
-                  }),
+                  // Entry blocks
+                  ...entries.map(_entryBlock),
                   // Current time indicator
                   if (nowMinute >= 0)
                     Positioned(
@@ -384,34 +353,6 @@ class _Timeline extends StatelessWidget {
     });
   }
 
-  /// Entry block that renders the logged entry split side-by-side with its
-  /// pending carve proposals.  Falls back to a plain [_entryBlock] when the
-  /// pixel height is too small to fit the carve UI (< 50 px).
-  Widget _entryBlockWithCarves(
-      LogEntry entry, List<CarveProposal> proposals) {
-    final startMin = entry.startTime.hour * 60 + entry.startTime.minute;
-    final endMin = (entry.endTime.hour * 60 + entry.endTime.minute)
-        .clamp(startMin + 1, 1440);
-    final top = startMin * hourPx / 60;
-    final height =
-        ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
-
-    if (height < 50) return _entryBlock(entry, carveProposals: proposals);
-
-    return Positioned(
-      top: top + 1,
-      left: 2,
-      right: 2,
-      height: height,
-      child: EntryWithCarves(
-        entry: entry,
-        proposals: proposals,
-        cats: cats,
-        onEntryTap: () => onEntryTap(entry),
-      ),
-    );
-  }
-
   Widget _ghostBlock(RoutineSlot slot) {
     final slotStart = slot.startHour * 60;
     final slotEnd = (slot.startHour + slot.durationHours) * 60;
@@ -458,8 +399,7 @@ class _Timeline extends StatelessWidget {
           border: Border(
             left: BorderSide(color: leftEdge, width: edgeWidth),
             top: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
-            right:
-                BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
+            right: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
             bottom:
                 BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
           ),
@@ -468,22 +408,21 @@ class _Timeline extends StatelessWidget {
     );
   }
 
-  Widget _entryBlock(LogEntry entry,
-      {List<CarveProposal> carveProposals = const []}) {
+  Widget _entryBlock(LogEntry entry) {
     final startMin = entry.startTime.hour * 60 + entry.startTime.minute;
     // Clamp end to midnight (1440 min) in case entry spans day boundary
     final endMin = (entry.endTime.hour * 60 + entry.endTime.minute)
         .clamp(startMin + 1, 1440);
     final top = startMin * hourPx / 60;
-    final height = ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
+    final height =
+        ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
 
     final cat = cats.where((c) => c.id == entry.categoryId).firstOrNull;
     final color = Color(cat?.colorValue ?? 0xFF607D8B);
 
     final base = Dismissible(
       key: ValueKey('logentry_${entry.id}'),
-      direction:
-          isToday ? DismissDirection.endToStart : DismissDirection.none,
+      direction: isToday ? DismissDirection.endToStart : DismissDirection.none,
       resizeDuration: null,
       background: Container(
         alignment: Alignment.centerRight,
@@ -499,220 +438,60 @@ class _Timeline extends StatelessWidget {
       child: GestureDetector(
         onTap: () => onEntryTap(entry),
         child: GlassCard(
-        borderRadius: 8,
-        opacity: 0.13,
-        blurSigma: 6,
-        fillColor: color.withValues(alpha: 0.22),
-        borderColor: color.withValues(alpha: 0.55),
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (entry.description.isNotEmpty)
-              Flexible(
-                child: Text(
-                  entry.description,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-            if (entry.isRealTime && height > 28)
-              Container(
-                margin: const EdgeInsets.only(top: 2),
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                decoration: BoxDecoration(
-                  color: color.withValues(alpha: 0.35),
-                  borderRadius: BorderRadius.circular(3),
-                ),
-                child: Text(
-                  'LIVE',
-                  style: TextStyle(
-                    color: color,
-                    fontSize: 8,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 0.6,
-                  ),
-                ),
-              ),
-          ],
-        ),
-      ),
-      ),
-    );
-
-    if (carveProposals.isEmpty) {
-      return Positioned(
-        top: top + 1,
-        left: 2,
-        right: 2,
-        height: height,
-        child: base,
-      );
-    }
-
-    // Short-entry fallback: block is too short for the inline carve UI, so
-    // overlay a small amber count marker that opens the carve bottom sheet.
-    // The marker is a separate tap target — block-tap still opens the edit
-    // sheet, and swipe-to-delete on today still works on the base.
-    return Positioned(
-      top: top + 1,
-      left: 2,
-      right: 2,
-      height: height,
-      child: Stack(
-        clipBehavior: Clip.none,
-        children: [
-          // Positioned.fill gives `base` tight parent-size constraints so its
-          // Dismissible/GestureDetector cover the whole block — otherwise
-          // Stack's default loose fit lets `base` shrink to its content and
-          // taps outside the marker fall through instead of opening the edit
-          // sheet.
-          Positioned.fill(child: base),
-          Positioned(
-            top: 2,
-            right: 2,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onTap: () => onShortCarveTap(entry),
-              child: Container(
-                width: 16,
-                height: 16,
-                alignment: Alignment.center,
-                decoration: const BoxDecoration(
-                  color: Color(0xFFFFAB40),
-                  shape: BoxShape.circle,
-                ),
-                child: Text(
-                  '${carveProposals.length}',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 9,
-                    fontWeight: FontWeight.w700,
-                    height: 1.0,
-                  ),
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-// ── Bottom sheet: carve controls for a short entry ───────────────────────────
-
-class _CarveSheet extends ConsumerWidget {
-  final LogEntry entry;
-  final List<Category> cats;
-
-  const _CarveSheet({required this.entry, required this.cats});
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final all =
-        ref.watch(carveProposalsProvider).valueOrNull ?? const <CarveProposal>[];
-    final live = all.where((p) => p.loggedEntry.id == entry.id).toList();
-
-    final fmt = DateFormat('h:mm a');
-    final header = entry.description.isNotEmpty
-        ? entry.description
-        : '${fmt.format(entry.startTime)} – ${fmt.format(entry.endTime)}';
-
-    return SafeArea(
-      top: false,
-      child: Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(context).viewInsets.bottom,
-        ),
-        child: GlassCard(
-          borderRadius: 24,
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 24),
+          borderRadius: 8,
+          opacity: 0.13,
+          blurSigma: 6,
+          fillColor: color.withValues(alpha: 0.22),
+          borderColor: color.withValues(alpha: 0.55),
+          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
           child: Column(
-            mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
             children: [
-              Center(
-                child: Container(
-                  width: 36,
-                  height: 4,
-                  margin: const EdgeInsets.only(bottom: 12),
-                  decoration: BoxDecoration(
-                    color: Colors.white24,
-                    borderRadius: BorderRadius.circular(2),
+              if (entry.description.isNotEmpty)
+                Flexible(
+                  child: Text(
+                    entry.description,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
                   ),
                 ),
-              ),
-              const Text(
-                'SCREEN TIME CARVES',
-                style: TextStyle(
-                  color: Colors.white54,
-                  fontSize: 10,
-                  fontWeight: FontWeight.w600,
-                  letterSpacing: 1.2,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                header,
-                style: const TextStyle(
-                  color: Colors.white,
-                  fontSize: 15,
-                  fontWeight: FontWeight.w700,
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-              const SizedBox(height: 14),
-              if (live.isEmpty)
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(vertical: 6),
-                      child: Text(
-                        'All carves handled ✓',
-                        style:
-                            TextStyle(color: Colors.white70, fontSize: 13),
-                      ),
+              if (entry.isRealTime && height > 28)
+                Container(
+                  margin: const EdgeInsets.only(top: 2),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: 0.35),
+                    borderRadius: BorderRadius.circular(3),
+                  ),
+                  child: Text(
+                    'LIVE',
+                    style: TextStyle(
+                      color: color,
+                      fontSize: 8,
+                      fontWeight: FontWeight.w800,
+                      letterSpacing: 0.6,
                     ),
-                    const SizedBox(height: 10),
-                    Align(
-                      alignment: Alignment.centerRight,
-                      child: FilledButton(
-                        onPressed: () => Navigator.of(context,
-                                rootNavigator: true)
-                            .pop(),
-                        style: FilledButton.styleFrom(
-                          backgroundColor:
-                              Colors.white.withValues(alpha: 0.14),
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 20, vertical: 8),
-                        ),
-                        child: const Text('Done'),
-                      ),
-                    ),
-                  ],
-                )
-              else
-                CarveActions(
-                  entry: entry,
-                  proposals: live,
-                  cats: cats,
-                  expandProposals: false,
+                  ),
                 ),
             ],
           ),
         ),
       ),
+    );
+
+    return Positioned(
+      top: top + 1,
+      left: 2,
+      right: 2,
+      height: height,
+      child: base,
     );
   }
 }
