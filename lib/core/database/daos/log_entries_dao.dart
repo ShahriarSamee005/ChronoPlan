@@ -26,6 +26,23 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
         .watch();
   }
 
+  /// Entries whose time range overlaps `[dayStart, dayEnd)`, so a cross-midnight
+  /// entry (e.g. last night's sleep) shows up on both the day it starts and the
+  /// day it ends.
+  ///
+  /// Intentionally separate from [watchForDay], which filters by `startTime`
+  /// alone and therefore only ever lands an entry on its starting day.
+  Stream<List<LogEntry>> watchEntriesOverlappingDay(DateTime date) {
+    final start = _dayStart(date);
+    final end = start.add(const Duration(days: 1));
+    return (select(logEntries)
+          ..where((e) =>
+              e.startTime.isSmallerThanValue(end) &
+              e.endTime.isBiggerThanValue(start))
+          ..orderBy([(e) => OrderingTerm(expression: e.startTime)]))
+        .watch();
+  }
+
   Future<List<LogEntry>> getForDay(DateTime date) {
     final start = _dayStart(date);
     final end = start.add(const Duration(days: 1));

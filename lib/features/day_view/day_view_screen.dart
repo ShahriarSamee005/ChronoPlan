@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -8,9 +10,19 @@ import '../../core/theme/glass_card.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/log_entries_provider.dart';
-import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../log_entry/log_entry_sheet.dart';
+import 'hour_row_planner.dart';
+
+/// Height of one lane inside an hour row. Tall enough that a 15-minute block
+/// still has room for its label.
+const double _laneHeight = 52.0;
+
+/// Floor width for very short slivers so they stay tappable. A 15-minute block
+/// sits well above this at its true width, so the layout stays truthful.
+const double _minSegWidth = 48.0;
+
+const double _gutterWidth = 52.0;
 
 class DayViewScreen extends ConsumerStatefulWidget {
   final DateTime? initialDate;
@@ -22,27 +34,28 @@ class DayViewScreen extends ConsumerStatefulWidget {
 
 class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   late DateTime _date;
-  static const double _hourPx = 76.0;
   final _scrollCtrl = ScrollController();
   final Set<int> _pendingDeleteIds = {};
+
+  /// Drives the now-line and the current-hour row once a minute.
+  Timer? _ticker;
+
+  /// The initial jump-to-now is one-shot; later scrolls are the user's.
+  bool _didInitialScroll = false;
 
   @override
   void initState() {
     super.initState();
     final now = DateTime.now();
     _date = widget.initialDate ?? DateTime(now.year, now.month, now.day);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final scrollTo = ((now.hour - 2).clamp(0, 21)) * _hourPx;
-      _scrollCtrl.animateTo(
-        scrollTo,
-        duration: const Duration(milliseconds: 500),
-        curve: Curves.easeOut,
-      );
+    _ticker = Timer.periodic(const Duration(minutes: 1), (_) {
+      if (mounted) setState(() {});
     });
   }
 
   @override
   void dispose() {
+    _ticker?.cancel();
     _scrollCtrl.dispose();
     super.dispose();
   }
@@ -64,15 +77,28 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     if (!candidate.isAfter(today)) setState(() => _date = candidate);
   }
 
+  /// Rows vary in height, so the landing offset is the running sum of the hours
+  /// above the target rather than a flat `hour * hourPx`.
+  void _scheduleInitialScroll(List<List<HourSegment>> rows) {
+    if (_didInitialScroll) return;
+    _didInitialScroll = true;
+    final target = (DateTime.now().hour - 2).clamp(0, 23);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      var offset = 0.0;
+      for (var h = 0; h < target; h++) {
+        offset += _rowHeight(rows, h);
+      }
+      final max = _scrollCtrl.position.maxScrollExtent;
+      _scrollCtrl.jumpTo(offset > max ? max : offset);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
-    final entriesAsync = ref.watch(logEntriesForDayProvider(_date));
+    final entriesAsync = ref.watch(dayViewEntriesProvider(_date));
     final catsAsync = ref.watch(categoriesProvider);
-    final routineAsync = ref.watch(allRoutineSlotsProvider);
-    final dayOfWeek = _date.weekday;
-    final todaySlots = (routineAsync.valueOrNull ?? [])
-        .where((s) => s.dayOfWeek == dayOfWeek || s.dayOfWeek == 0)
-        .toList();
+    // Phase 3: routine overlay returns here (allRoutineSlotsProvider).
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -111,14 +137,23 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
               final visible = entries
                   .where((e) => !_pendingDeleteIds.contains(e.id))
                   .toList();
+              final rows = planHourRows(
+                visible
+                    .map((e) => (
+                          entryId: e.id,
+                          start: e.startTime,
+                          end: e.endTime,
+                        ))
+                    .toList(),
+                day: _date,
+              );
+              _scheduleInitialScroll(rows);
               return _Timeline(
-                date: _date,
-                entries: visible,
+                rows: rows,
+                byId: {for (final e in visible) e.id: e},
                 cats: catsAsync.valueOrNull ?? [],
-                routineSlots: todaySlots,
                 isToday: _isToday,
                 scrollCtrl: _scrollCtrl,
-                hourPx: _hourPx,
                 onEntryTap: (entry) => showModalBottomSheet(
                   context: context,
                   isScrollControlled: true,
@@ -127,6 +162,8 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   builder: (_) => LogEntrySheet(existing: entry),
                 ),
                 onDeleteEntry: (entry) {
+                  // Keyed on the ENTRY, not the segment, so every slice of a
+                  // multi-hour block disappears in the same frame.
                   setState(() => _pendingDeleteIds.add(entry.id));
                   ref
                       .read(appDatabaseProvider)
@@ -145,6 +182,13 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     );
   }
 }
+
+/// The planner guarantees one uniform `laneCount` across an hour's segments.
+int _laneCountOf(List<List<HourSegment>> rows, int hour) =>
+    rows[hour].isEmpty ? 1 : rows[hour].first.laneCount;
+
+double _rowHeight(List<List<HourSegment>> rows, int hour) =>
+    _laneHeight * _laneCountOf(rows, hour);
 
 // ── Date navigation row ──────────────────────────────────────────────────────
 
@@ -197,301 +241,276 @@ class _DateNav extends StatelessWidget {
   }
 }
 
-// ── 24-hour timeline ─────────────────────────────────────────────────────────
+// ── 24-hour timeline, one row per hour ───────────────────────────────────────
 
 class _Timeline extends StatelessWidget {
-  final DateTime date;
-  final List<LogEntry> entries;
+  final List<List<HourSegment>> rows;
+  final Map<int, LogEntry> byId;
   final List<Category> cats;
-  final List<RoutineSlot> routineSlots;
   final bool isToday;
   final ScrollController scrollCtrl;
-  final double hourPx;
   final void Function(LogEntry) onEntryTap;
   final void Function(LogEntry) onDeleteEntry;
 
   const _Timeline({
-    required this.date,
-    required this.entries,
+    required this.rows,
+    required this.byId,
     required this.cats,
-    required this.routineSlots,
     required this.isToday,
     required this.scrollCtrl,
-    required this.hourPx,
     required this.onEntryTap,
     required this.onDeleteEntry,
   });
 
   @override
   Widget build(BuildContext context) {
+    // Built once, not per segment — a day can hold hundreds of slices.
+    final byCatId = {for (final c in cats) c.id: c};
     final now = DateTime.now();
-    final nowMinute = isToday ? now.hour * 60 + now.minute : -1;
 
-    return SingleChildScrollView(
+    return ListView.builder(
       controller: scrollCtrl,
+      // Rows vary in height with their lane count, so no itemExtent.
+      itemCount: 24,
       padding: const EdgeInsets.only(bottom: 100),
-      child: SizedBox(
-        height: hourPx * 24 + 1,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hour labels
-            SizedBox(
-              width: 52,
-              child: Stack(
-                children: List.generate(25, (h) {
-                  return Positioned(
-                    top: h * hourPx - 6,
-                    left: 0,
-                    right: 4,
-                    child: Text(
-                      '${h.toString().padLeft(2, '0')}:00',
-                      textAlign: TextAlign.right,
-                      style: const TextStyle(
-                        color: Colors.white38,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  );
-                }),
+      itemBuilder: (_, h) => _HourRow(
+        hour: h,
+        segments: rows[h],
+        height: _rowHeight(rows, h),
+        byId: byId,
+        byCatId: byCatId,
+        isToday: isToday,
+        now: now,
+        onEntryTap: onEntryTap,
+        onDeleteEntry: onDeleteEntry,
+      ),
+    );
+  }
+}
+
+class _HourRow extends StatelessWidget {
+  final int hour;
+  final List<HourSegment> segments;
+  final double height;
+  final Map<int, LogEntry> byId;
+  final Map<int, Category> byCatId;
+  final bool isToday;
+  final DateTime now;
+  final void Function(LogEntry) onEntryTap;
+  final void Function(LogEntry) onDeleteEntry;
+
+  const _HourRow({
+    required this.hour,
+    required this.segments,
+    required this.height,
+    required this.byId,
+    required this.byCatId,
+    required this.isToday,
+    required this.now,
+    required this.onEntryTap,
+    required this.onDeleteEntry,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final isCurrentHour = isToday && now.hour == hour;
+
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        SizedBox(
+          width: _gutterWidth,
+          child: Padding(
+            padding: const EdgeInsets.only(right: 6, top: 2),
+            child: Text(
+              '${hour.toString().padLeft(2, '0')}:00',
+              textAlign: TextAlign.right,
+              style: const TextStyle(
+                color: Colors.white38,
+                fontSize: 10,
+                fontWeight: FontWeight.w500,
               ),
             ),
-            // Timeline body
-            Expanded(
-              child: Stack(
-                children: [
-                  // Hour dividers
-                  ...List.generate(
-                      24,
-                      (h) => Positioned(
-                            top: h * hourPx,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 0.5,
-                              color: Colors.white.withValues(alpha: 0.10),
-                            ),
-                          )),
-                  // Half-hour dividers
-                  ...List.generate(
-                      24,
-                      (h) => Positioned(
-                            top: h * hourPx + hourPx / 2,
-                            left: 0,
-                            right: 0,
-                            child: Container(
-                              height: 0.5,
-                              color: Colors.white.withValues(alpha: 0.04),
-                            ),
-                          )),
-                  // Routine ghost blocks (behind real entries)
-                  ...routineSlots.map((s) => _ghostBlock(s)),
-                  // Entry blocks
-                  ...entries.map(_entryBlock),
-                  // Current time indicator
-                  if (nowMinute >= 0)
+          ),
+        ),
+        Expanded(
+          child: SizedBox(
+            height: height,
+            child: LayoutBuilder(
+              builder: (_, constraints) {
+                final w = constraints.maxWidth;
+                return Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    // Hour divider, painted inside the Stack so it costs no
+                    // layout height (the scroll offset math depends on that).
                     Positioned(
-                      top: nowMinute * hourPx / 60 - 1,
+                      top: 0,
                       left: 0,
                       right: 0,
-                      child: Row(
-                        children: [
-                          Container(
-                            width: 9,
-                            height: 9,
-                            decoration: const BoxDecoration(
-                              color: Colors.redAccent,
-                              shape: BoxShape.circle,
-                            ),
-                          ),
-                          Expanded(
-                            child: Container(
-                              height: 1.5,
-                              color: Colors.redAccent,
-                            ),
-                          ),
-                        ],
+                      child: Container(
+                        height: 0.5,
+                        color: Colors.white.withValues(alpha: 0.10),
                       ),
                     ),
-                ],
+                    for (final seg in segments) ..._segment(seg, w),
+                    if (isCurrentHour) ..._nowLine(constraints.maxHeight),
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(width: 8),
+      ],
+    );
+  }
+
+  List<Widget> _segment(HourSegment seg, double w) {
+    final entry = byId[seg.entryId];
+    if (entry == null) return const [];
+
+    final color = Color(byCatId[entry.categoryId]?.colorValue ?? 0xFF607D8B);
+
+    var left = seg.startMin / 60 * w;
+    var width = (seg.endMin - seg.startMin) / 60 * w;
+    if (width < _minSegWidth) width = _minSegWidth;
+    if (width > w) width = w;
+    // A floored sliver near the right edge would overflow — shift it back in.
+    if (left + width > w) left = w - width;
+    if (left < 0) left = 0;
+
+    // Round only the outer ends so a multi-hour entry reads as one bar.
+    const r = Radius.circular(8);
+    final radius = BorderRadius.only(
+      topLeft: seg.isFirstOfEntry ? r : Radius.zero,
+      bottomLeft: seg.isFirstOfEntry ? r : Radius.zero,
+      topRight: seg.isLastOfEntry ? r : Radius.zero,
+      bottomRight: seg.isLastOfEntry ? r : Radius.zero,
+    );
+
+    return [
+      Positioned(
+        left: left,
+        top: seg.lane * _laneHeight,
+        width: width,
+        // 4 px breathing room between stacked lanes.
+        height: _laneHeight - 4,
+        child: Dismissible(
+          key: ValueKey('seg_${seg.entryId}_${hour}_${seg.lane}'),
+          direction:
+              isToday ? DismissDirection.endToStart : DismissDirection.none,
+          resizeDuration: null,
+          background: Container(
+            alignment: Alignment.centerRight,
+            padding: const EdgeInsets.only(right: 12),
+            decoration: BoxDecoration(
+              color: Colors.redAccent.withValues(alpha: 0.20),
+              borderRadius: radius,
+            ),
+            child: const Icon(Icons.delete_outline_rounded,
+                color: Colors.redAccent, size: 18),
+          ),
+          onDismissed: (_) => onDeleteEntry(entry),
+          child: ClipRRect(
+            // GlassCard only takes a uniform double radius, so the per-corner
+            // shape has to come from the clip.
+            borderRadius: radius,
+            // GlassCard's own detector is opaque and innermost, so the tap has
+            // to be registered there — an outer GestureDetector never sees it.
+            child: GlassCard(
+              onTap: () => onEntryTap(entry),
+              // Without an explicit size the card shrinks to its label, so the
+              // bar would render as a chip and only the text would be tappable.
+              width: double.infinity,
+              height: double.infinity,
+              borderRadius: 0,
+              opacity: 0.13,
+              blurSigma: 6,
+              fillColor: color.withValues(alpha: 0.22),
+              borderColor: color.withValues(alpha: 0.55),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              child: seg.isFirstOfEntry
+                  ? Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (entry.description.isNotEmpty)
+                          Flexible(
+                            child: Text(
+                              entry.description,
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        if (entry.isRealTime)
+                          Container(
+                            margin: const EdgeInsets.only(top: 2),
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 4, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.35),
+                              borderRadius: BorderRadius.circular(3),
+                            ),
+                            child: Text(
+                              'LIVE',
+                              style: TextStyle(
+                                color: color,
+                                fontSize: 8,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.6,
+                              ),
+                            ),
+                          ),
+                      ],
+                    )
+                  : const SizedBox.expand(),
+            ),
+          ),
+        ),
+      ),
+    ];
+  }
+
+  /// Slides down through the current hour's row as the minutes pass, then jumps
+  /// to the top of the next row on the hour. Drawn last so it rides above the
+  /// blocks it crosses.
+  List<Widget> _nowLine(double h) {
+    var y = now.minute / 60 * h;
+    if (y > h - 1.5) y = h - 1.5;
+    if (y < 0) y = 0;
+    return [
+      Positioned(
+        key: const Key('now_line'),
+        left: 0,
+        right: 0,
+        top: y,
+        height: 1.5,
+        child: const IgnorePointer(
+          child: ColoredBox(color: Colors.redAccent),
+        ),
+      ),
+      Positioned(
+        left: 0,
+        top: y - 2.75,
+        child: const IgnorePointer(
+          child: SizedBox(
+            width: 7,
+            height: 7,
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: Colors.redAccent,
+                shape: BoxShape.circle,
               ),
             ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  double _slotCoverage(RoutineSlot slot) {
-    final slotStart = slot.startHour * 60;
-    final slotEnd = (slot.startHour + slot.durationHours) * 60;
-    final slotLen = slotEnd - slotStart;
-    if (slotLen <= 0) return 0;
-    int covered = 0;
-    for (final e in entries) {
-      final eStart = e.startTime.hour * 60 + e.startTime.minute;
-      final eEnd = e.endTime.hour * 60 + e.endTime.minute;
-      final overlap =
-          (eEnd.clamp(slotStart, slotEnd) - eStart.clamp(slotStart, slotEnd))
-              .clamp(0, slotLen);
-      covered += overlap;
-    }
-    return covered / slotLen;
-  }
-
-  bool _hasCategoryMatch(RoutineSlot slot) {
-    final slotStart = slot.startHour * 60;
-    final slotEnd = (slot.startHour + slot.durationHours) * 60;
-    return entries.any((e) {
-      final eStart = e.startTime.hour * 60 + e.startTime.minute;
-      final eEnd = e.endTime.hour * 60 + e.endTime.minute;
-      return e.categoryId == slot.categoryId &&
-          eStart < slotEnd &&
-          eEnd > slotStart;
-    });
-  }
-
-  Widget _ghostBlock(RoutineSlot slot) {
-    final slotStart = slot.startHour * 60;
-    final slotEnd = (slot.startHour + slot.durationHours) * 60;
-    final top = slotStart * hourPx / 60;
-    final height =
-        ((slotEnd - slotStart) * hourPx / 60 - 2).clamp(6.0, double.infinity);
-
-    final cat = cats.where((c) => c.id == slot.categoryId).firstOrNull;
-    final color = Color(cat?.colorValue ?? 0xFF607D8B);
-
-    final now = DateTime.now();
-    final nowMinute = isToday ? now.hour * 60 + now.minute : 1440;
-    final isPast = slotEnd <= nowMinute;
-
-    Color leftEdge;
-    double edgeWidth;
-    if (isPast) {
-      final cov = _slotCoverage(slot);
-      final match = _hasCategoryMatch(slot);
-      if (cov >= 0.75 && match) {
-        leftEdge = Colors.greenAccent;
-        edgeWidth = 3.5;
-      } else if (cov >= 0.10) {
-        leftEdge = Colors.amberAccent;
-        edgeWidth = 3.5;
-      } else {
-        leftEdge = Colors.redAccent.withValues(alpha: 0.7);
-        edgeWidth = 3.5;
-      }
-    } else {
-      leftEdge = color.withValues(alpha: 0.22);
-      edgeWidth = 1.5;
-    }
-
-    return Positioned(
-      top: top + 1,
-      left: 2,
-      right: 2,
-      height: height,
-      child: Container(
-        decoration: BoxDecoration(
-          color: color.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(6),
-          border: Border(
-            left: BorderSide(color: leftEdge, width: edgeWidth),
-            top: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
-            right: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
-            bottom:
-                BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
           ),
         ),
       ),
-    );
-  }
-
-  Widget _entryBlock(LogEntry entry) {
-    final startMin = entry.startTime.hour * 60 + entry.startTime.minute;
-    // Clamp end to midnight (1440 min) in case entry spans day boundary
-    final endMin = (entry.endTime.hour * 60 + entry.endTime.minute)
-        .clamp(startMin + 1, 1440);
-    final top = startMin * hourPx / 60;
-    final height =
-        ((endMin - startMin) * hourPx / 60 - 2).clamp(6.0, double.infinity);
-
-    final cat = cats.where((c) => c.id == entry.categoryId).firstOrNull;
-    final color = Color(cat?.colorValue ?? 0xFF607D8B);
-
-    final base = Dismissible(
-      key: ValueKey('logentry_${entry.id}'),
-      direction: isToday ? DismissDirection.endToStart : DismissDirection.none,
-      resizeDuration: null,
-      background: Container(
-        alignment: Alignment.centerRight,
-        padding: const EdgeInsets.only(right: 12),
-        decoration: BoxDecoration(
-          color: Colors.redAccent.withValues(alpha: 0.20),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Icon(Icons.delete_outline_rounded,
-            color: Colors.redAccent, size: 18),
-      ),
-      onDismissed: (_) => onDeleteEntry(entry),
-      child: GestureDetector(
-        onTap: () => onEntryTap(entry),
-        child: GlassCard(
-          borderRadius: 8,
-          opacity: 0.13,
-          blurSigma: 6,
-          fillColor: color.withValues(alpha: 0.22),
-          borderColor: color.withValues(alpha: 0.55),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (entry.description.isNotEmpty)
-                Flexible(
-                  child: Text(
-                    entry.description,
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w600,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-              if (entry.isRealTime && height > 28)
-                Container(
-                  margin: const EdgeInsets.only(top: 2),
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: color.withValues(alpha: 0.35),
-                    borderRadius: BorderRadius.circular(3),
-                  ),
-                  child: Text(
-                    'LIVE',
-                    style: TextStyle(
-                      color: color,
-                      fontSize: 8,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: 0.6,
-                    ),
-                  ),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-
-    return Positioned(
-      top: top + 1,
-      left: 2,
-      right: 2,
-      height: height,
-      child: base,
-    );
+    ];
   }
 }
