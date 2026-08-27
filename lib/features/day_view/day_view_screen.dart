@@ -10,9 +10,11 @@ import '../../core/theme/glass_card.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/log_entries_provider.dart';
+import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../log_entry/log_entry_sheet.dart';
 import 'hour_row_planner.dart';
+import 'routine_overlay_planner.dart';
 
 /// Height of one lane inside an hour row. Tall enough that a 15-minute block
 /// still has room for its label.
@@ -98,7 +100,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
   Widget build(BuildContext context) {
     final entriesAsync = ref.watch(dayViewEntriesProvider(_date));
     final catsAsync = ref.watch(categoriesProvider);
-    // Phase 3: routine overlay returns here (allRoutineSlotsProvider).
+    final routineAsync = ref.watch(allRoutineSlotsProvider);
 
     return Scaffold(
       backgroundColor: Colors.transparent,
@@ -148,10 +150,42 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                 day: _date,
               );
               _scheduleInitialScroll(rows);
+
+              // Compute routine overlay for the day.
+              final routineEdges = routineAsync.whenData((allSlots) {
+                // Filter to applicable slots: isActive + applicable day-of-week.
+                final daySlots = allSlots
+                    .where((s) =>
+                        s.isActive &&
+                        (s.dayOfWeek == _date.weekday || s.dayOfWeek == 0))
+                    .map((s) => (
+                          startHour: s.startHour,
+                          durationHours: s.durationHours,
+                          categoryId: s.categoryId,
+                        ))
+                    .toList();
+
+                final planLogs = visible
+                    .map((e) => (
+                          start: e.startTime,
+                          end: e.endTime,
+                          categoryId: e.categoryId,
+                        ))
+                    .toList();
+
+                return planRoutineEdges(
+                  daySlots,
+                  planLogs,
+                  day: _date,
+                  now: DateTime.now(),
+                );
+              }).valueOrNull;
+
               return _Timeline(
                 rows: rows,
                 byId: {for (final e in visible) e.id: e},
                 cats: catsAsync.valueOrNull ?? [],
+                routineEdges: routineEdges,
                 isToday: _isToday,
                 scrollCtrl: _scrollCtrl,
                 onEntryTap: (entry) => showModalBottomSheet(
@@ -247,6 +281,7 @@ class _Timeline extends StatelessWidget {
   final List<List<HourSegment>> rows;
   final Map<int, LogEntry> byId;
   final List<Category> cats;
+  final List<HourRoutine?>? routineEdges;
   final bool isToday;
   final ScrollController scrollCtrl;
   final void Function(LogEntry) onEntryTap;
@@ -256,6 +291,7 @@ class _Timeline extends StatelessWidget {
     required this.rows,
     required this.byId,
     required this.cats,
+    required this.routineEdges,
     required this.isToday,
     required this.scrollCtrl,
     required this.onEntryTap,
@@ -279,6 +315,7 @@ class _Timeline extends StatelessWidget {
         height: _rowHeight(rows, h),
         byId: byId,
         byCatId: byCatId,
+        routineEdge: routineEdges?[h],
         isToday: isToday,
         now: now,
         onEntryTap: onEntryTap,
@@ -294,6 +331,7 @@ class _HourRow extends StatelessWidget {
   final double height;
   final Map<int, LogEntry> byId;
   final Map<int, Category> byCatId;
+  final HourRoutine? routineEdge;
   final bool isToday;
   final DateTime now;
   final void Function(LogEntry) onEntryTap;
@@ -305,6 +343,7 @@ class _HourRow extends StatelessWidget {
     required this.height,
     required this.byId,
     required this.byCatId,
+    required this.routineEdge,
     required this.isToday,
     required this.now,
     required this.onEntryTap,
@@ -353,6 +392,15 @@ class _HourRow extends StatelessWidget {
                         color: Colors.white.withValues(alpha: 0.10),
                       ),
                     ),
+                    // Routine overlay edge (behind segments).
+                    if (routineEdge != null)
+                      IgnorePointer(
+                        child: _routineEdge(
+                          routineEdge!,
+                          height,
+                          byCatId[routineEdge!.categoryId]?.colorValue ?? 0xFF607D8B,
+                        ),
+                      ),
                     for (final seg in segments) ..._segment(seg, w),
                     if (isCurrentHour) ..._nowLine(constraints.maxHeight),
                   ],
@@ -364,6 +412,45 @@ class _HourRow extends StatelessWidget {
         const SizedBox(width: 8),
       ],
     );
+  }
+
+  Widget _routineEdge(HourRoutine routine, double height, int colorValue) {
+    final color = Color(colorValue);
+
+    // Determine edge color and width based on verdict.
+    final (edgeColor, edgeWidth) = _verdictToEdge(routine.verdict, color);
+
+    return Positioned(
+      top: 0,
+      left: 2,
+      right: 2,
+      height: height,
+      child: Container(
+        decoration: BoxDecoration(
+          color: color.withValues(alpha: 0.06),
+          borderRadius: BorderRadius.circular(6),
+          border: Border(
+            left: BorderSide(color: edgeColor, width: edgeWidth),
+            top: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
+            right: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
+            bottom: BorderSide(color: color.withValues(alpha: 0.14), width: 0.5),
+          ),
+        ),
+      ),
+    );
+  }
+
+  (Color, double) _verdictToEdge(RoutineVerdict verdict, Color categoryColor) {
+    switch (verdict) {
+      case RoutineVerdict.green:
+        return (Colors.greenAccent, 3.5);
+      case RoutineVerdict.amber:
+        return (Colors.amberAccent, 3.5);
+      case RoutineVerdict.red:
+        return (Colors.redAccent.withValues(alpha: 0.7), 3.5);
+      case RoutineVerdict.neutral:
+        return (categoryColor.withValues(alpha: 0.22), 1.5);
+    }
   }
 
   List<Widget> _segment(HourSegment seg, double w) {
