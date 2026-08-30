@@ -6,10 +6,13 @@ import 'package:go_router/go_router.dart';
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/glass_card.dart';
+import '../../core/theme/hour_timeline.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
+import '../day_view/hour_row_planner.dart';
+import 'routine_plan_adapter.dart';
 
 class RoutineScreen extends ConsumerStatefulWidget {
   const RoutineScreen({super.key});
@@ -20,8 +23,17 @@ class RoutineScreen extends ConsumerStatefulWidget {
 
 class _RoutineScreenState extends ConsumerState<RoutineScreen> {
   late int _selectedDay;
-  static const _hourPx = 72.0;
   final _scrollCtrl = ScrollController();
+
+  /// Optimistic-delete guard: a swiped slot is hidden here immediately so the
+  /// dismissed `Dismissible` leaves the tree before the async Drift delete lands
+  /// (otherwise the "dismissed Dismissible still in the tree" assertion fires).
+  /// Self-prunes when the stream re-emits without the id. Mirrors Day View.
+  final Set<int> _pendingDeleteIds = {};
+
+  /// A routine template has no "now", so there is no scroll-to-now. The one-shot
+  /// initial scroll just lands near the morning (hour 06:00), as before.
+  bool _didInitialScroll = false;
 
   static const _days = [
     (1, 'Mon'), (2, 'Tue'), (3, 'Wed'), (4, 'Thu'),
@@ -32,19 +44,32 @@ class _RoutineScreenState extends ConsumerState<RoutineScreen> {
   void initState() {
     super.initState();
     _selectedDay = DateTime.now().weekday.clamp(1, 7);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _scrollCtrl.animateTo(
-        6 * _hourPx,
-        duration: const Duration(milliseconds: 400),
-        curve: Curves.easeOut,
-      );
-    });
   }
 
   @override
   void dispose() {
     _scrollCtrl.dispose();
     super.dispose();
+  }
+
+  /// Rows vary in height with their lane count, so the landing offset is the
+  /// running sum of the hours above 06:00 rather than a flat `hour * hourPx`.
+  void _scheduleInitialScroll(List<List<HourSegment>> rows) {
+    if (_didInitialScroll) return;
+    _didInitialScroll = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_scrollCtrl.hasClients) return;
+      var offset = 0.0;
+      for (var h = 0; h < 6; h++) {
+        offset += HourTimeline.rowHeight(rows, h);
+      }
+      final max = _scrollCtrl.position.maxScrollExtent;
+      _scrollCtrl.animateTo(
+        offset > max ? max : offset,
+        duration: const Duration(milliseconds: 400),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
@@ -101,23 +126,70 @@ class _RoutineScreenState extends ConsumerState<RoutineScreen> {
               Expanded(
                 child: slotsAsync.when(
                   data: (all) {
-                    final cats = catsAsync.valueOrNull ?? [];
+                    // Drop ids that already vanished from the stream, then apply
+                    // the (unchanged) dayOfWeek-only filter plus the optimistic
+                    // delete guard.
+                    _pendingDeleteIds
+                        .removeWhere((id) => !all.any((s) => s.id == id));
+                    final cats = catsAsync.valueOrNull ?? <Category>[];
+                    final byCatId = {for (final c in cats) c.id: c};
                     final daySlots = all
                         .where((s) =>
-                            s.dayOfWeek == _selectedDay ||
-                            s.dayOfWeek == 0)
+                            (s.dayOfWeek == _selectedDay ||
+                                s.dayOfWeek == 0) &&
+                            !_pendingDeleteIds.contains(s.id))
                         .toList();
-                    return _RoutineTimeline(
-                      slots: daySlots,
-                      cats: cats,
-                      hourPx: _hourPx,
-                      scrollCtrl: _scrollCtrl,
-                      onTapHour: (h) => _openSheet(startHour: h),
-                      onTapSlot: (slot) => _openSheet(existing: slot),
-                      onDeleteSlot: (id) => ref
-                          .read(appDatabaseProvider)
-                          .routineSlotsDao
-                          .deleteSlot(id),
+
+                    // A routine template is weekday-keyed, not date-keyed; any
+                    // consistent day anchors the hour math and the midnight clip.
+                    final now = DateTime.now();
+                    final day = DateTime(now.year, now.month, now.day);
+                    final rows = planHourRows(
+                      slotsToPlanEntries(
+                        daySlots
+                            .map((s) => (
+                                  id: s.id,
+                                  startHour: s.startHour,
+                                  durationHours: s.durationHours,
+                                ))
+                            .toList(),
+                        day: day,
+                      ),
+                      day: day,
+                    );
+                    _scheduleInitialScroll(rows);
+
+                    final byId = {for (final s in daySlots) s.id: s};
+
+                    return HourTimeline(
+                      rows: rows,
+                      scrollController: _scrollCtrl,
+                      segmentColor: (id) => Color(
+                          byCatId[byId[id]?.categoryId]?.colorValue ??
+                              0xFF607D8B),
+                      segmentLabel: (id) {
+                        final slot = byId[id];
+                        if (slot == null) return '';
+                        final cat = byCatId[slot.categoryId];
+                        return slot.label.isNotEmpty
+                            ? slot.label
+                            : (cat?.name ?? 'Unlabelled');
+                      },
+                      onSegmentTap: (id) {
+                        final slot = byId[id];
+                        if (slot != null) _openSheet(existing: slot);
+                      },
+                      onSegmentDelete: (id) {
+                        setState(() => _pendingDeleteIds.add(id));
+                        ref
+                            .read(appDatabaseProvider)
+                            .routineSlotsDao
+                            .deleteSlot(id);
+                      },
+                      swipeEnabled: true,
+                      onEmptyHourTap: (h) => _openSheet(startHour: h),
+                      backgroundLayers: null,
+                      foregroundLayers: null,
                     );
                   },
                   loading: () =>
@@ -265,171 +337,6 @@ class _DayPills extends StatelessWidget {
             ),
           );
         }).toList(),
-      ),
-    );
-  }
-}
-
-// ── 24-hour routine timeline ──────────────────────────────────────────────────
-
-class _RoutineTimeline extends StatelessWidget {
-  final List<RoutineSlot> slots;
-  final List<Category> cats;
-  final double hourPx;
-  final ScrollController scrollCtrl;
-  final void Function(int hour) onTapHour;
-  final void Function(RoutineSlot) onTapSlot;
-  final void Function(int id) onDeleteSlot;
-
-  const _RoutineTimeline({
-    required this.slots,
-    required this.cats,
-    required this.hourPx,
-    required this.scrollCtrl,
-    required this.onTapHour,
-    required this.onTapSlot,
-    required this.onDeleteSlot,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      controller: scrollCtrl,
-      padding: const EdgeInsets.only(bottom: 100),
-      child: SizedBox(
-        height: hourPx * 24 + 1,
-        child: Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Hour labels
-            SizedBox(
-              width: 52,
-              child: Stack(
-                children: List.generate(25, (h) => Positioned(
-                  top: h * hourPx - 6,
-                  left: 0,
-                  right: 4,
-                  child: Text(
-                    '${h.toString().padLeft(2, '0')}:00',
-                    textAlign: TextAlign.right,
-                    style: const TextStyle(
-                      color: Colors.white38,
-                      fontSize: 10,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                )),
-              ),
-            ),
-            // Timeline body
-            Expanded(
-              child: Stack(
-                children: [
-                  // Tappable empty cells (behind slot blocks)
-                  ...List.generate(24, (h) {
-                    final covered = slots.any((s) =>
-                        h >= s.startHour &&
-                        h < s.startHour + s.durationHours);
-                    return Positioned(
-                      top: h * hourPx,
-                      left: 0,
-                      right: 0,
-                      height: hourPx,
-                      child: covered
-                          ? const SizedBox.expand()
-                          : GestureDetector(
-                              onTap: () => onTapHour(h),
-                              behavior: HitTestBehavior.opaque,
-                              child: Container(color: Colors.transparent),
-                            ),
-                    );
-                  }),
-                  // Hour dividers
-                  ...List.generate(24, (h) => Positioned(
-                    top: h * hourPx,
-                    left: 0,
-                    right: 0,
-                    child: Container(
-                      height: 0.5,
-                      color: Colors.white.withValues(alpha: 0.10),
-                    ),
-                  )),
-                  // Slot blocks
-                  ...slots.map((slot) => _slotBlock(slot)),
-                ],
-              ),
-            ),
-            const SizedBox(width: 8),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _slotBlock(RoutineSlot slot) {
-    final top = slot.startHour * hourPx + 1;
-    final height = (slot.durationHours * hourPx - 2).clamp(6.0, double.infinity);
-    final cat = cats.where((c) => c.id == slot.categoryId).firstOrNull;
-    final color = Color(cat?.colorValue ?? 0xFF607D8B);
-    final isEveryDay = slot.dayOfWeek == 0;
-
-    return Positioned(
-      top: top,
-      left: 2,
-      right: 2,
-      height: height,
-      child: Dismissible(
-        key: ValueKey('rslot_${slot.id}'),
-        direction: DismissDirection.endToStart,
-        background: Container(
-          alignment: Alignment.centerRight,
-          padding: const EdgeInsets.only(right: 12),
-          decoration: BoxDecoration(
-            color: Colors.redAccent.withValues(alpha: 0.20),
-            borderRadius: BorderRadius.circular(8),
-          ),
-          child: const Icon(Icons.delete_outline_rounded,
-              color: Colors.redAccent, size: 18),
-        ),
-        onDismissed: (_) => onDeleteSlot(slot.id),
-        child: GlassCard(
-          borderRadius: 8,
-          opacity: isEveryDay ? 0.06 : 0.12,
-          blurSigma: 5,
-          fillColor: color.withValues(alpha: isEveryDay ? 0.12 : 0.25),
-          borderColor: color.withValues(alpha: isEveryDay ? 0.30 : 0.55),
-          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-          onTap: () => onTapSlot(slot),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Flexible(
-                child: Text(
-                  slot.label.isNotEmpty
-                      ? slot.label
-                      : (cat?.name ?? 'Unlabelled'),
-                  style: TextStyle(
-                    color: isEveryDay ? Colors.white70 : Colors.white,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                  ),
-                  maxLines: 2,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ),
-              if (isEveryDay && height > 28)
-                Text(
-                  'Every day',
-                  style: TextStyle(
-                    color: color.withValues(alpha: 0.70),
-                    fontSize: 9,
-                    fontWeight: FontWeight.w500,
-                  ),
-                ),
-            ],
-          ),
-        ),
       ),
     );
   }
