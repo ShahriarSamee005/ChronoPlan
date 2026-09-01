@@ -1,0 +1,54 @@
+<!doctype html>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>ChronoPlan — gradient proposal</title>
+<style>
+  :root { font-family: -apple-system, Segoe UI, Roboto, sans-serif; }
+  body { margin: 0; background:#0b1220; color:#e8edf5; padding:16px; }
+  h1 { font-size:18px; font-weight:700; margin:4px 4px 2px; }
+  p.sub { font-size:13px; color:#9fb0c7; margin:0 4px 16px; line-height:1.4; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+  @media (max-width:560px){ .grid{ grid-template-columns:1fr; } }
+  .panel { border-radius:18px; overflow:hidden; min-height:230px; position:relative;
+           display:flex; flex-direction:column; justify-content:space-between;
+           box-shadow:0 4px 18px rgba(0,0,0,.35); }
+  .panel .tag { align-self:flex-start; margin:12px; padding:5px 11px; border-radius:20px;
+                font-size:12px; font-weight:600; letter-spacing:.3px;
+                background:rgba(255,255,255,.16); color:#fff; backdrop-filter:blur(4px);
+                border:1px solid rgba(255,255,255,.25); }
+  .panel .hours { position:absolute; top:14px; right:14px; font-size:11px; color:rgba(255,255,255,.8); }
+  /* sample "glass card" like the real app, to check white-text legibility */
+  .card { margin:12px; padding:12px 14px; border-radius:14px;
+          background:rgba(255,255,255,.12); border:1px solid rgba(255,255,255,.22);
+          backdrop-filter:blur(8px); }
+  .card .time { font-size:22px; font-weight:700; color:#fff; }
+  .card .now { font-size:12px; color:rgba(255,255,255,.82); margin-top:2px; }
+
+  /* --- PROPOSED VIVID PALETTES (top -> bottom, matching your described scheme) --- */
+  .morning { background:linear-gradient(160deg,#2e1a4d 0%, #a83f6e 55%, #f2955c 100%); }   /* orange-pink sunrise */
+  .midday  { background:linear-gradient(160deg,#4a2a12 0%, #c56a1f 55%, #f0ad3e 100%); }   /* warm orange */
+  .evening { background:linear-gradient(160deg,#16324a 0%, #2f7cad 55%, #86c4e6 100%); }   /* light blue */
+  .night   { background:linear-gradient(160deg,#0a1330 0%, #16264f 55%, #274a7d 100%); }   /* deep blue */
+</style>
+
+<h1>Proposed time-of-day gradients</h1>
+<p class="sub">Vivid and clearly different per time of day, with a sample glass card + white text on each so you can check it stays readable. These are a starting point — we tune the exact colours before writing any code.</p>
+
+<div class="grid">
+  <div class="panel morning">
+    <span class="tag">Morning · orange-pink</span><span class="hours">5:00–10:59</span>
+    <div class="card"><div class="time">08:30</div><div class="now">Right now — nothing logged</div></div>
+  </div>
+  <div class="panel midday">
+    <span class="tag">Midday · orange</span><span class="hours">11:00–16:59</span>
+    <div class="card"><div class="time">14:30</div><div class="now">Right now — nothing logged</div></div>
+  </div>
+  <div class="panel evening">
+    <span class="tag">Evening · light blue</span><span class="hours">17:00–20:59</span>
+    <div class="card"><div class="time">18:45</div><div class="now">Right now — nothing logged</div></div>
+  </div>
+  <div class="panel night">
+    <span class="tag">Night · deep blue</span><span class="hours">21:00–4:59</span>
+    <div class="card"><div class="time">23:10</div><div class="now">Right now — nothing logged</div></div>
+  </div>
+</div>

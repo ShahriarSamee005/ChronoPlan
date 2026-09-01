@@ -41,10 +41,51 @@ List<int> computeMissedHours(List<LogEntry> entries, {DateTime? now}) {
   return missed;
 }
 
+/// The initial `[start, end]` a freshly opened CREATE sheet should show for
+/// [day] (any DateTime on the target calendar date) and optional [initialHour].
+///
+/// [initialHour] (0–23) seeds `day @ hour:00` → `day @ (hour+1):00`, where an
+/// end of hour 24 rolls to next-day midnight — the app's end-of-day form.
+///
+/// With no [initialHour] this reproduces the "last completed hour" default
+/// (e.g. at 6:45 PM → 5:00 PM–6:00 PM), but anchored to [day] instead of
+/// today. [now] defaults to `DateTime.now()` and only affects that path; when
+/// [day] is today the result equals the pre-day-aware default exactly.
+({DateTime start, DateTime end}) resolveInitialTimes({
+  required DateTime day,
+  int? initialHour,
+  DateTime? now,
+}) {
+  final anchor = DateTime(day.year, day.month, day.day);
+  if (initialHour != null) {
+    final start =
+        DateTime(anchor.year, anchor.month, anchor.day, initialHour);
+    return (start: start, end: start.add(const Duration(hours: 1)));
+  }
+  final reference = now ?? DateTime.now();
+  final DateTime start;
+  if (reference.hour > 0) {
+    start = DateTime(anchor.year, anchor.month, anchor.day, reference.hour - 1);
+  } else {
+    // Midnight edge case: 23:00 of the day before the anchor.
+    final prev = anchor.subtract(const Duration(days: 1));
+    start = DateTime(prev.year, prev.month, prev.day, 23);
+  }
+  return (start: start, end: start.add(const Duration(hours: 1)));
+}
+
 class LogEntrySheet extends ConsumerStatefulWidget {
   final LogEntry? existing;
 
-  const LogEntrySheet({super.key, this.existing});
+  /// The calendar day to log on. Null = today (unchanged behaviour). Ignored in
+  /// edit mode, where the entry's own times win.
+  final DateTime? day;
+
+  /// Optional 0–23 hour to pre-fill for a new entry. Null = the default
+  /// "last completed hour". Ignored in edit mode.
+  final int? initialHour;
+
+  const LogEntrySheet({super.key, this.existing, this.day, this.initialHour});
 
   @override
   ConsumerState<LogEntrySheet> createState() => _LogEntrySheetState();
@@ -52,6 +93,9 @@ class LogEntrySheet extends ConsumerStatefulWidget {
 
 class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   final _descCtrl = TextEditingController();
+
+  /// Midnight of the day this sheet logs on. Today when [widget.day] is null.
+  late final DateTime _day;
 
   late DateTime _startTime;
   late DateTime _endTime;
@@ -66,28 +110,24 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   @override
   void initState() {
     super.initState();
+    final now = DateTime.now();
+    _day = widget.day == null
+        ? DateTime(now.year, now.month, now.day)
+        : DateTime(widget.day!.year, widget.day!.month, widget.day!.day);
     if (widget.existing != null) {
+      // Edit mode: the entry's own times win; day/initialHour are ignored.
       final e = widget.existing!;
       _descCtrl.text = e.description;
       _startTime = e.startTime;
       _endTime = e.endTime;
       _selectedCategoryId = e.categoryId;
     } else {
-      _startTime = _defaultStart();
-      _endTime = _startTime.add(const Duration(hours: 1));
+      final seed =
+          resolveInitialTimes(day: _day, initialHour: widget.initialHour);
+      _startTime = seed.start;
+      _endTime = seed.end;
     }
     _descCtrl.addListener(_onDescriptionChanged);
-  }
-
-  /// Defaults to the last completed hour — e.g. at 6:45 PM → 5:00 PM–6:00 PM.
-  DateTime _defaultStart() {
-    final now = DateTime.now();
-    if (now.hour > 0) {
-      return DateTime(now.year, now.month, now.day, now.hour - 1);
-    }
-    // Midnight edge case: yesterday 23:00
-    final yesterday = now.subtract(const Duration(days: 1));
-    return DateTime(yesterday.year, yesterday.month, yesterday.day, 23);
   }
 
   @override
@@ -102,12 +142,19 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     final catsAsync = ref.watch(categoriesProvider);
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    final todayEntries =
-        ref.watch(logEntriesForDayProvider(today)).valueOrNull ?? [];
+    final isDayToday = _day == today;
+    final dayEntries =
+        ref.watch(logEntriesForDayProvider(_day)).valueOrNull ?? [];
     final bottom = MediaQuery.of(context).viewInsets.bottom;
 
-    final missedHours =
-        widget.existing == null ? computeMissedHours(todayEntries) : <int>[];
+    // On today, this matches the pre-day-aware call exactly. On a past day,
+    // every hour of the day is eligible (reference = end of that day).
+    final missedHours = widget.existing != null
+        ? <int>[]
+        : isDayToday
+            ? computeMissedHours(dayEntries)
+            : computeMissedHours(dayEntries,
+                now: _day.add(const Duration(hours: 23, minutes: 59)));
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
@@ -146,8 +193,10 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
                     selectedHour: _startTime.hour,
                     onTap: (h) {
                       setState(() {
-                        _startTime = today.add(Duration(hours: h));
+                        _startTime = _day.add(Duration(hours: h));
                         final end = _startTime.add(const Duration(hours: 1));
+                        // Clamp only ever bites on today; a past-day end is
+                        // never after now.
                         _endTime = end.isAfter(now) ? now : end;
                       });
                     },
@@ -366,6 +415,13 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   Future<void> _save() async {
     if (!_endTime.isAfter(_startTime)) {
       _showSnack('End time must be after start time.');
+      return;
+    }
+    // Past is always allowed; only the future is blocked (no lower bound). The
+    // picker guards its own edits, but a seeded future hour reaches here first.
+    final now = DateTime.now();
+    if (_startTime.isAfter(now) || _endTime.isAfter(now)) {
+      _showSnack('Cannot log future time.');
       return;
     }
     setState(() => _isSaving = true);

@@ -6,24 +6,24 @@ class AppColors {
   // ── Time-based background gradients ────────────────────────────────────
   // Dark bases — glass reads best on dark backgrounds
   static const _morning = [
-    Color(0xFF3D1C0A), // deep burnt orange
-    Color(0xFF7B3500), // amber-brown
-    Color(0xFF4A1800), // dark sienna
+    Color(0xFF2E1A4D), // dusky violet
+    Color(0xFFA83F6E), // rose-pink
+    Color(0xFFF2955C), // warm peach
   ];
   static const _midday = [
-    Color(0xFF071428), // deep navy
-    Color(0xFF0D2137), // ocean blue
-    Color(0xFF0A2744), // slate blue
+    Color(0xFF4A2A12), // dark umber
+    Color(0xFFC56A1F), // burnt orange
+    Color(0xFFF0AD3E), // golden amber
   ];
   static const _evening = [
-    Color(0xFF1A0630), // deep violet
-    Color(0xFF2D0B50), // dark purple
-    Color(0xFF3D1A10), // ember
+    Color(0xFF16324A), // deep teal
+    Color(0xFF2F7CAD), // sky blue
+    Color(0xFF86C4E6), // light cerulean
   ];
   static const _night = [
-    Color(0xFF04060F), // near black
-    Color(0xFF080D22), // deep indigo
-    Color(0xFF060D1E), // midnight
+    Color(0xFF0A1330), // deep navy
+    Color(0xFF16264F), // indigo
+    Color(0xFF274A7D), // muted steel blue
   ];
 
   static List<Color> gradientForHour(int hour) {

@@ -69,6 +69,29 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
     if (!candidate.isAfter(today)) setState(() => _date = candidate);
   }
 
+  /// Opens the day-aware log sheet for the viewed day at the tapped [hour].
+  ///
+  /// Past days are always allowed. On today, an hour strictly after the current
+  /// one is refused up front with the sheet's own future-time message (the
+  /// in-progress hour opens — the sheet's save-time guard clamps any end that
+  /// would exceed now).
+  void _onEmptyHourTap(int hour) {
+    final now = DateTime.now();
+    if (_isToday && hour > now.hour) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Cannot log future time.')),
+      );
+      return;
+    }
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      useRootNavigator: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => LogEntrySheet(day: _date, initialHour: hour),
+    );
+  }
+
   /// Rows vary in height, so the landing offset is the running sum of the hours
   /// above the target rather than a flat `hour * hourPx`.
   void _scheduleInitialScroll(List<List<HourSegment>> rows) {
@@ -203,7 +226,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   ref.read(appDatabaseProvider).logEntriesDao.deleteEntry(id);
                 },
                 swipeEnabled: isToday,
-                onEmptyHourTap: null,
+                onEmptyHourTap: _onEmptyHourTap,
                 backgroundLayers: (hour, w, rowH) {
                   final edge = routineEdges?[hour];
                   if (edge == null) return const <Widget>[];
