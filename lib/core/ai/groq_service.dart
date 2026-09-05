@@ -6,6 +6,7 @@ import 'package:http/http.dart' as http;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import '../../config/supabase_config.dart';
+import '../analytics/used_ai_store.dart';
 
 // ── Exceptions ────────────────────────────────────────────────────────────
 
@@ -44,7 +45,17 @@ class ParsedEntry {
 class GroqService {
   final String persona;
 
-  const GroqService({this.persona = 'friendly'});
+  /// Flipped true on the first successful call (any method). Optional so
+  /// `const GroqService()` and existing call sites keep working untouched.
+  final UsedAiStore? _usedAi;
+
+  const GroqService({this.persona = 'friendly', UsedAiStore? usedAiStore})
+      : _usedAi = usedAiStore;
+
+  void _markAiUsed() {
+    final store = _usedAi;
+    if (store != null) unawaited(store.markUsed());
+  }
 
   static const _proxyUrl =
       '${SupabaseConfig.url}/functions/v1/${SupabaseConfig.groqProxyFunction}';
@@ -91,6 +102,7 @@ class GroqService {
       throw GroqUnavailableException(
           '${response.statusCode}: ${response.body}');
     }
+    _markAiUsed(); // 2xx — a real AI call landed
     return jsonDecode(response.body) as Map<String, dynamic>;
   }
 
@@ -103,8 +115,14 @@ class GroqService {
   // ── AI Features ───────────────────────────────────────────────────────
 
   /// Parse free-text like "meeting then coffee 20 min" into structured
-  /// log entries. Returns null on failure (caller shows manual UI).
-  Future<List<ParsedEntry>?> parseLogText(
+  /// log entries.
+  ///
+  /// Returns `null` only on total failure (network error, non-2xx, or a
+  /// response that cannot be decoded into a JSON list) — the caller shows the
+  /// manual UI. On success returns the cleanly-mapped [entries] plus a
+  /// [skipped] count of array items that were present but unusable; a valid
+  /// empty array yields `(entries: [], skipped: 0)`, not null.
+  Future<({List<ParsedEntry> entries, int skipped})?> parseLogText(
     String text,
     DateTime anchorTime,
     List<String> knownCategories,
@@ -135,21 +153,7 @@ class GroqService {
         ],
       });
 
-      final raw = _extractContent(data).trim();
-      final jsonStr = raw.contains('[')
-          ? raw.substring(raw.indexOf('['), raw.lastIndexOf(']') + 1)
-          : raw;
-      final list = jsonDecode(jsonStr) as List<dynamic>;
-
-      return list.map((item) {
-        final m = item as Map<String, dynamic>;
-        return ParsedEntry(
-          description: m['description'] as String,
-          suggestedCategory: m['suggestedCategory'] as String?,
-          startTime: DateTime.parse(m['startISO'] as String),
-          endTime: DateTime.parse(m['endISO'] as String),
-        );
-      }).toList();
+      return parseEntriesFromRaw(_extractContent(data));
     } catch (e) {
       debugPrint('GroqService.parseLogText: $e');
       return null;
@@ -282,6 +286,7 @@ class GroqService {
         yield "Couldn't reach the AI coach. Try again in a moment.";
         return;
       }
+      _markAiUsed(); // 2xx — the coach stream opened
 
       final lines = response.stream
           .transform(utf8.decoder)
@@ -308,4 +313,132 @@ class GroqService {
       client.close();
     }
   }
+}
+
+// ── Response parsing (pure, network-free; unit-tested directly) ─────────────
+
+/// Decode a raw model response into structured log entries.
+///
+/// Returns `null` only on total failure — nothing in the response decodes into
+/// a JSON list. Otherwise returns the cleanly-mapped [entries] plus a [skipped]
+/// count of items that were present in the array but unusable. A response that
+/// decodes to a valid empty array returns `(entries: [], skipped: 0)`.
+({List<ParsedEntry> entries, int skipped})? parseEntriesFromRaw(String raw) {
+  final list = _extractJsonList(raw);
+  if (list == null) return null;
+
+  final entries = <ParsedEntry>[];
+  var skipped = 0;
+  for (final item in list) {
+    final entry = _tryMapEntry(item);
+    if (entry == null) {
+      skipped++;
+    } else {
+      entries.add(entry);
+    }
+  }
+  return (entries: entries, skipped: skipped);
+}
+
+/// Pull the first JSON array out of a model response, tolerating reasoning-style
+/// prose and code fences around it. Tries, in order: a direct decode of the
+/// whole response, the content of the first fenced code block, then a
+/// balanced-bracket scan of the raw text. Returns null if none yield a list.
+List<dynamic>? _extractJsonList(String raw) {
+  final trimmed = raw.trim();
+
+  // 1. The whole response is the JSON.
+  final direct = _tryDecodeList(trimmed);
+  if (direct != null) return direct;
+
+  // 2. Content of the first fenced block (```json … ``` or ``` … ```).
+  final fence = RegExp(r'```(?:json)?\s*([\s\S]*?)```', caseSensitive: false)
+      .firstMatch(trimmed);
+  if (fence != null) {
+    final inner = _tryDecodeList(fence.group(1)!.trim());
+    if (inner != null) return inner;
+  }
+
+  // 3. Balanced-bracket scan: the first '[' … matching ']' span that decodes to
+  //    a list. Strengthens the old first-'[' to last-']' substring so prose that
+  //    happens to contain a stray bracket cannot drag the wrong span in.
+  for (var i = 0; i < trimmed.length; i++) {
+    if (trimmed[i] != '[') continue;
+    final end = _matchBracket(trimmed, i);
+    if (end == -1) continue;
+    final span = _tryDecodeList(trimmed.substring(i, end + 1));
+    if (span != null) return span;
+  }
+
+  return null;
+}
+
+/// jsonDecode [s] and return it only if it decodes to a List; null on any
+/// failure or non-list result.
+List<dynamic>? _tryDecodeList(String s) {
+  try {
+    final decoded = jsonDecode(s);
+    return decoded is List ? decoded : null;
+  } catch (_) {
+    return null;
+  }
+}
+
+/// Index of the ']' matching the '[' at [start], honoring string literals and
+/// nested brackets. Returns -1 if the bracket never closes.
+int _matchBracket(String s, int start) {
+  var depth = 0;
+  var inString = false;
+  var escaped = false;
+  for (var i = start; i < s.length; i++) {
+    final c = s[i];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (c == r'\') {
+        escaped = true;
+      } else if (c == '"') {
+        inString = false;
+      }
+      continue;
+    }
+    if (c == '"') {
+      inString = true;
+    } else if (c == '[') {
+      depth++;
+    } else if (c == ']') {
+      depth--;
+      if (depth == 0) return i;
+    }
+  }
+  return -1;
+}
+
+/// Map one decoded array item to a [ParsedEntry], or null if unusable. An item
+/// is usable only when it is a map with a non-empty (trimmed) `description`,
+/// `startISO`/`endISO` strings that parse, and an end strictly after the start.
+/// A non-string `suggestedCategory` is treated as null rather than
+/// disqualifying the entry.
+ParsedEntry? _tryMapEntry(dynamic item) {
+  if (item is! Map<String, dynamic>) return null;
+
+  final description = item['description'];
+  if (description is! String || description.trim().isEmpty) return null;
+
+  final startISO = item['startISO'];
+  final endISO = item['endISO'];
+  if (startISO is! String || endISO is! String) return null;
+
+  final startTime = DateTime.tryParse(startISO);
+  final endTime = DateTime.tryParse(endISO);
+  if (startTime == null || endTime == null) return null;
+  if (!endTime.isAfter(startTime)) return null;
+
+  final category = item['suggestedCategory'];
+  return ParsedEntry(
+    description: description,
+    suggestedCategory: category is String ? category : null,
+    startTime: startTime,
+    endTime: endTime,
+  );
 }

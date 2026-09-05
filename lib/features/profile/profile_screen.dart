@@ -123,6 +123,11 @@ class ProfileScreen extends ConsumerWidget {
                 onTap: () => context.push('/settings'),
               ),
               _LinkTile(
+                icon: Icons.help_outline_rounded,
+                label: 'How ChronoPlan works',
+                onTap: () => context.push('/onboarding'),
+              ),
+              _LinkTile(
                 icon: Icons.cloud_outlined,
                 label: 'Sync (coming soon)',
                 onTap: null,

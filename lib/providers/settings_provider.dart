@@ -2,6 +2,7 @@ import 'package:drift/drift.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../core/ai/groq_service.dart';
+import '../core/analytics/used_ai_store.dart';
 import '../core/database/app_database.dart';
 import 'database_provider.dart';
 
@@ -15,7 +16,10 @@ final settingsProvider = StreamProvider<UserSetting>((ref) {
 
 final aiServiceProvider = Provider<GroqService>((ref) {
   final settings = ref.watch(settingsProvider).valueOrNull;
-  return GroqService(persona: settings?.aiPersona ?? 'friendly');
+  return GroqService(
+    persona: settings?.aiPersona ?? 'friendly',
+    usedAiStore: ref.read(usedAiStoreProvider),
+  );
 });
 
 // ── Notifier for patching UserSettings ────────────────────────────────────

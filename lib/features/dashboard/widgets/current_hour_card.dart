@@ -7,14 +7,62 @@ import 'package:intl/intl.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/glass_card.dart';
 import '../../../providers/categories_provider.dart';
-import '../../../providers/log_entries_provider.dart';
+import '../../../providers/routine_provider.dart';
+import '../current_slot_planner.dart';
 
-class CurrentHourCard extends ConsumerWidget {
+class CurrentHourCard extends ConsumerStatefulWidget {
   const CurrentHourCard({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final todayAsync = ref.watch(todayEntriesProvider);
+  ConsumerState<CurrentHourCard> createState() => _CurrentHourCardState();
+}
+
+class _CurrentHourCardState extends ConsumerState<CurrentHourCard> {
+  // Rebuilds the routine strip when the clock rolls into a new hour. Separate
+  // from _LiveClock's timer on purpose: _LiveClock rebuilds itself every minute
+  // for the HH:mm string, while this only rebuilds the card body — and only on
+  // an hour change. One timer can't serve both without folding _LiveClock into
+  // this widget, which would change its per-minute behaviour.
+  Timer? _timer;
+  late int _lastHour;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastHour = DateTime.now().hour;
+    // Align the first tick to the next minute boundary, then tick each minute —
+    // same pattern as _LiveClock.
+    final now = DateTime.now();
+    final delay = Duration(
+      seconds: 60 - now.second,
+      milliseconds: -now.millisecond,
+    );
+    Future.delayed(delay, _startTicking);
+  }
+
+  void _startTicking() {
+    if (!mounted) return;
+    _checkHour();
+    _timer = Timer.periodic(const Duration(minutes: 1), (_) => _checkHour());
+  }
+
+  void _checkHour() {
+    if (!mounted) return;
+    final hour = DateTime.now().hour;
+    if (hour != _lastHour) {
+      setState(() => _lastHour = hour);
+    }
+  }
+
+  @override
+  void dispose() {
+    _timer?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final slotsAsync = ref.watch(allRoutineSlotsProvider);
     final catsAsync = ref.watch(categoriesProvider);
     final tt = Theme.of(context).textTheme;
 
@@ -40,21 +88,27 @@ class CurrentHourCard extends ConsumerWidget {
           Text('Right now', style: tt.labelSmall),
           const SizedBox(height: 6),
 
-          // Current activity — built from two async sources
-          todayAsync.when(
-            data: (entries) {
-              final now = DateTime.now();
-              final current = entries
-                  .where(
-                    (e) =>
-                        e.startTime.isBefore(now) &&
-                        e.endTime.isAfter(now),
-                  )
-                  .firstOrNull;
+          // What the ROUTINE says should be happening this hour.
+          slotsAsync.when(
+            data: (slots) {
+              final planned = slotForHour(
+                slots
+                    .map((s) => (
+                          id: s.id,
+                          startHour: s.startHour,
+                          durationHours: s.durationHours,
+                          dayOfWeek: s.dayOfWeek,
+                          isActive: s.isActive,
+                          label: s.label,
+                          categoryId: s.categoryId,
+                        ))
+                    .toList(),
+                now: DateTime.now(),
+              );
 
-              if (current == null) {
+              if (planned == null) {
                 return Text(
-                  '— nothing logged',
+                  '— nothing planned',
                   style: tt.titleLarge?.copyWith(
                     color: AppColors.textMuted,
                     fontStyle: FontStyle.italic,
@@ -62,9 +116,10 @@ class CurrentHourCard extends ConsumerWidget {
                 );
               }
 
-              // Extract categoryId here so it's captured by value,
-              // not as a field access across the catsAsync closure.
-              final categoryId = current.categoryId;
+              // Capture by value so the catsAsync closure doesn't reach back
+              // across the planned record.
+              final categoryId = planned.categoryId;
+              final slotLabel = planned.label;
 
               return catsAsync.when(
                 data: (cats) {
@@ -73,6 +128,7 @@ class CurrentHourCard extends ConsumerWidget {
                       : cats
                           .where((c) => c.id == categoryId)
                           .firstOrNull;
+                  final name = resolveSlotName(slotLabel, cat?.name);
 
                   return Row(
                     children: [
@@ -89,9 +145,7 @@ class CurrentHourCard extends ConsumerWidget {
                       ],
                       Expanded(
                         child: Text(
-                          current.description.isNotEmpty
-                              ? current.description
-                              : (cat?.name ?? 'Logged'),
+                          name,
                           style: tt.titleLarge,
                           overflow: TextOverflow.ellipsis,
                         ),

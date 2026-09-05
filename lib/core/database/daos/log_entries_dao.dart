@@ -62,6 +62,13 @@ class LogEntriesDao extends DatabaseAccessor<AppDatabase>
   Future<LogEntry?> getById(int id) =>
       (select(logEntries)..where((e) => e.id.equals(id))).getSingleOrNull();
 
+  /// Total number of log entries across all days — analytics counter only.
+  Future<int> countAll() async {
+    final query = selectOnly(logEntries)..addColumns([logEntries.id.count()]);
+    final row = await query.getSingle();
+    return row.read(logEntries.id.count()) ?? 0;
+  }
+
   Future<List<LogEntry>> getForWeek(DateTime weekStart) {
     final end = weekStart.add(const Duration(days: 7));
     return (select(logEntries)

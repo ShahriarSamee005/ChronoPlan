@@ -635,7 +635,16 @@ class _ParseSheet extends ConsumerStatefulWidget {
 class _ParseSheetState extends ConsumerState<_ParseSheet> {
   final _ctrl = TextEditingController();
   bool _isParsing = false;
+  bool _isConfirming = false;
   List<ParsedEntry>? _parsed;
+
+  /// How many array items the parser dropped as unreadable (Phase 1's
+  /// `skipped`). Shown above the review list while `_parsed != null`.
+  int _skipped = 0;
+
+  /// Outcome line shown after a partial/blocked confirm, so it stays visible
+  /// while the user reviews the entries that did not land. Null = nothing to say.
+  String? _confirmMessage;
   String? _error;
 
   @override
@@ -651,6 +660,8 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
       _isParsing = true;
       _error = null;
       _parsed = null;
+      _skipped = 0;
+      _confirmMessage = null;
     });
     final catNames = widget.cats.map((c) => c.name).toList();
     final result = await widget.service
@@ -658,36 +669,58 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
     if (mounted) {
       setState(() {
         _isParsing = false;
-        if (result == null || result.isEmpty) {
+        if (result == null || result.entries.isEmpty) {
           _error = 'Couldn\'t parse that — try being more specific.';
         } else {
-          _parsed = result;
+          _parsed = result.entries;
+          _skipped = result.skipped;
         }
       });
     }
   }
 
   Future<void> _confirm() async {
-    if (_parsed == null) return;
+    if (_isConfirming || _parsed == null) return;
+    setState(() {
+      _isConfirming = true;
+      _confirmMessage = null;
+    });
+
     final db = ref.read(appDatabaseProvider);
-    for (final e in _parsed!) {
-      final catName = e.suggestedCategory?.toLowerCase();
-      final cat = catName != null
-          ? widget.cats
-              .where((c) => c.name.toLowerCase() == catName)
-              .firstOrNull
-          : null;
-      await db.logEntriesDao.insertRetroactive(
-        startTime: e.startTime,
-        endTime: e.endTime,
-        categoryId: cat?.id,
-        description: e.description,
-      );
+    final attempted = List<ParsedEntry>.of(_parsed!);
+    late final ({List<ParsedEntry> added, int blocked, int failed}) outcome;
+    try {
+      outcome = await writeParsedEntries(db, attempted, widget.cats);
+    } finally {
+      if (mounted) setState(() => _isConfirming = false);
     }
-    if (mounted) {
+    if (!mounted) return;
+
+    final total = attempted.length;
+    final added = outcome.added.length;
+
+    // Drop everything that landed so a second Confirm tap can only ever retry
+    // the not-yet-written entries — nothing can be written twice.
+    if (outcome.added.isNotEmpty && _parsed != null) {
+      final written = outcome.added.toSet();
+      setState(() {
+        _parsed = _parsed!.where((e) => !written.contains(e)).toList();
+      });
+    }
+
+    if (added == total) {
       Navigator.of(context).pop();
       widget.onDone();
+      return;
     }
+
+    setState(() {
+      _confirmMessage = confirmMessageFor(
+        added: added,
+        blocked: outcome.blocked,
+        failed: outcome.failed,
+      );
+    });
   }
 
   @override
@@ -726,6 +759,24 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
               style: TextStyle(color: Colors.white54, fontSize: 12),
             ),
             const SizedBox(height: 14),
+            if (_parsed != null && _skipped > 0)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  _skipped == 1
+                      ? '$_skipped entry couldn\'t be read and was left out.'
+                      : '$_skipped entries couldn\'t be read and were left out.',
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
+            if (_parsed != null && _confirmMessage != null)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 10),
+                child: Text(
+                  _confirmMessage!,
+                  style: const TextStyle(color: Colors.white54, fontSize: 12),
+                ),
+              ),
             if (_parsed == null) ...[
               TextField(
                 controller: _ctrl,
@@ -830,7 +881,9 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                 children: [
                   Expanded(
                     child: OutlinedButton(
-                      onPressed: () => setState(() => _parsed = null),
+                      onPressed: _isConfirming
+                          ? null
+                          : () => setState(() => _parsed = null),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: Colors.white70,
                         side: const BorderSide(color: Colors.white24),
@@ -845,7 +898,7 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                   const SizedBox(width: 12),
                   Expanded(
                     child: FilledButton(
-                      onPressed: _confirm,
+                      onPressed: _isConfirming ? null : _confirm,
                       style: FilledButton.styleFrom(
                         backgroundColor: accent,
                         shape: RoundedRectangleBorder(
@@ -853,8 +906,15 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                         padding:
                             const EdgeInsets.symmetric(vertical: 12),
                       ),
-                      child: Text('Add ${_parsed!.length} '
-                          '${_parsed!.length == 1 ? 'entry' : 'entries'}'),
+                      child: _isConfirming
+                          ? const SizedBox(
+                              height: 18,
+                              width: 18,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : Text('Add ${_parsed!.length} '
+                              '${_parsed!.length == 1 ? 'entry' : 'entries'}'),
                     ),
                   ),
                 ],
@@ -865,6 +925,84 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
       ),
     );
   }
+}
+
+// ── Parse-confirm write logic (extracted so it is unit-testable without the
+//    network-gated parse step or the private sheet widget) ──────────────────
+
+/// Write each parsed entry in its own transaction, tolerating per-entry
+/// failure, and bucket the results.
+///
+/// Every entry goes through [LogEntriesDao.insertRetroactive] with
+/// `avoidUsageDerived: true` (matching the manual save path) wrapped in its own
+/// [GeneratedDatabase.transaction] so a single entry lands whole or not at all.
+/// A throw on one entry does not stop the loop.
+///
+///   • **added**   — no throw and `writtenMinutes > 0` (a trimmed partial still
+///                   counts as added; nothing is said about the trim)
+///   • **blocked** — no throw and `writtenMinutes == 0`
+///   • **failed**  — the write threw
+///
+/// The returned `added` list holds the actual [ParsedEntry] objects that landed,
+/// so the caller can remove them from its pending list and never write twice.
+@visibleForTesting
+Future<({List<ParsedEntry> added, int blocked, int failed})> writeParsedEntries(
+  AppDatabase db,
+  List<ParsedEntry> entries,
+  List<Category> cats,
+) async {
+  final added = <ParsedEntry>[];
+  var blocked = 0;
+  var failed = 0;
+  for (final e in entries) {
+    final catName = e.suggestedCategory?.toLowerCase();
+    final cat = catName != null
+        ? cats.where((c) => c.name.toLowerCase() == catName).firstOrNull
+        : null;
+    try {
+      final result = await db.transaction(
+        () => db.logEntriesDao.insertRetroactive(
+          startTime: e.startTime,
+          endTime: e.endTime,
+          categoryId: cat?.id,
+          description: e.description,
+          avoidUsageDerived: true,
+        ),
+      );
+      if (result.writtenMinutes > 0) {
+        added.add(e);
+      } else {
+        blocked++;
+      }
+    } catch (_) {
+      failed++;
+    }
+  }
+  return (added: added, blocked: blocked, failed: failed);
+}
+
+/// The outcome line for a confirm, or null when everything landed (full
+/// success shows no message and the sheet closes).
+@visibleForTesting
+String? confirmMessageFor({
+  required int added,
+  required int blocked,
+  required int failed,
+}) {
+  final total = added + blocked + failed;
+  if (added == total) return null;
+  if (added == 0) {
+    return failed > 0
+        ? 'Nothing added — save failed.'
+        : 'Nothing added — those times are already covered.';
+  }
+  if (blocked > 0 && failed > 0) {
+    return 'Added $added of $total. $blocked already covered, $failed failed.';
+  }
+  if (blocked > 0) {
+    return 'Added $added of $total. $blocked already covered.';
+  }
+  return 'Added $added of $total. $failed failed to save.';
 }
 
 // ── Sleep toggle row ─────────────────────────────────────────────────────────

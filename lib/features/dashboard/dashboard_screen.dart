@@ -1,8 +1,11 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/analytics/analytics_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/database_provider.dart';
@@ -50,6 +53,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
 
   Future<void> _onResume() async {
     ref.read(settingsNotifierProvider.notifier).incrementAppOpenCount();
+    // Fire-and-forget once-a-day usage-analytics ping. pingIfDue swallows all
+    // failures internally, so this never blocks the UI or throws into _onResume.
+    unawaited(ref.read(analyticsServiceProvider).pingIfDue());
     // Re-check usage permission and refresh usage data on every resume so
     // permission grants and new usage are reflected without a full restart.
     ref.invalidate(usagePermissionProvider);

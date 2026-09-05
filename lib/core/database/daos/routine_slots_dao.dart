@@ -28,6 +28,14 @@ class RoutineSlotsDao extends DatabaseAccessor<AppDatabase>
             ..orderBy([(s) => OrderingTerm(expression: s.startHour)]))
           .get();
 
+  /// Total number of routine slots (active or not) — analytics counter only.
+  Future<int> countAll() async {
+    final query = selectOnly(routineSlots)
+      ..addColumns([routineSlots.id.count()]);
+    final row = await query.getSingle();
+    return row.read(routineSlots.id.count()) ?? 0;
+  }
+
   Future<int> insertSlot(RoutineSlotsCompanion entry) =>
       into(routineSlots).insert(entry);
 

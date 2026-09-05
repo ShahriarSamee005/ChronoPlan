@@ -8,13 +8,17 @@ import 'features/day_view/day_view_screen.dart';
 import 'features/debrief/debrief_screen.dart';
 import 'features/debug/usage_debug_screen.dart';
 import 'features/history/history_screen.dart';
+import 'features/onboarding/onboarding_screen.dart';
 import 'features/profile/profile_screen.dart';
 import 'features/routine/routine_screen.dart';
 import 'features/settings/settings_screen.dart';
 import 'features/shell/app_shell.dart';
 
-final router = GoRouter(
-  initialLocation: '/',
+/// Builds the app router with a resolved [initialLocation]. `main()` decides
+/// between `/onboarding` and `/` from the seen-onboarding flag BEFORE `runApp`,
+/// so the first frame paints the right screen — no redirect, no flash.
+GoRouter createRouter({String initialLocation = '/'}) => GoRouter(
+  initialLocation: initialLocation,
   routes: [
     // ── Shell routes (persistent bottom nav) ──────────────────────────────
     ShellRoute(
@@ -41,6 +45,11 @@ final router = GoRouter(
       ],
     ),
     // ── Full-page routes (pushed over shell) ──────────────────────────────
+    // First-run onboarding — outside the ShellRoute so no bottom nav shows.
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
     GoRoute(
       path: '/settings',
       builder: (context, state) => const SettingsScreen(),

@@ -1,11 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
-import 'router.dart';
 
 class ChronoPlanApp extends StatelessWidget {
-  const ChronoPlanApp({super.key});
+  /// Built in `main()` with the first-frame initial location already resolved
+  /// from the seen-onboarding flag.
+  final GoRouter router;
+
+  const ChronoPlanApp({super.key, required this.router});
 
   @override
   Widget build(BuildContext context) {
