@@ -67,7 +67,8 @@ flutter:
 flutter_launcher_icons:
   android: true
   ios: false
-  image_path: "assets/branding/Chronoplan logo 5.png"
-  adaptive_icon_background: "#BFD5F5"
-  adaptive_icon_foreground: "assets/branding/Chronoplan logo 5.png"
+  image_path: "assets/branding/icon_legacy.png"
+  adaptive_icon_background: "assets/branding/icon_background.png"
+  adaptive_icon_foreground: "assets/branding/icon_foreground.png"
+  adaptive_icon_foreground_inset: 0
   min_sdk_android: 21

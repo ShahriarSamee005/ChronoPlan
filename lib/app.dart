@@ -3,7 +3,6 @@ import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
 
 import 'core/theme/app_theme.dart';
-import 'features/splash/splash_gate.dart';
 
 class ChronoPlanApp extends StatelessWidget {
   /// Built in `main()` with the first-frame initial location already resolved
@@ -23,10 +22,6 @@ class ChronoPlanApp extends StatelessWidget {
       theme: AppTheme.dark,
       routerConfig: router,
       debugShowCheckedModeBanner: false,
-      // The splash overlays whatever the router built; it never decides the
-      // route. The onboarding-vs-dashboard choice stays in main() before runApp.
-      builder: (context, child) =>
-          SplashGate(child: child ?? const SizedBox.shrink()),
     );
   }
 }

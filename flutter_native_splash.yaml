@@ -1,17 +1,9 @@
 flutter_native_splash:
-  # All branding now happens in Flutter (see SplashGate). The native splash is a
-  # plain solid colour that matches SplashGate's base, so the OS-splash → Flutter
-  # hand-off shows no jump. `color` and `background_image` are mutually
-  # exclusive; only `color` is set here.
   color: "#BFD5F5"
-
+  image: "assets/branding/splash.png"
   android: true
   ios: false
   web: false
-
-  # Android 12+ system splash: solid colour with the masked icon. The icon
-  # background is set equal to the page colour so the icon shows no visible box.
   android_12:
     color: "#BFD5F5"
-    icon_background_color: "#BFD5F5"
-    image: "assets/branding/icon_foreground.png"
+    image: "assets/branding/splash_android12.png"

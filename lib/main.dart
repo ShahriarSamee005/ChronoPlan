@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -9,6 +11,35 @@ import 'core/notifications/notification_service.dart';
 import 'core/onboarding/seen_onboarding_store.dart';
 import 'providers/database_provider.dart';
 import 'router.dart';
+
+/// How long startup is willing to wait on the anonymous sign-in before giving
+/// up and launching anyway. One bounded attempt — no retry.
+const Duration kSignInTimeout = Duration(seconds: 4);
+
+/// Runs the anonymous sign-in as a single bounded attempt, then returns no
+/// matter what. The app launches regardless of the outcome: whether sign-in
+/// succeeds, times out after [timeout], or throws. AI features simply degrade
+/// to their signed-out behaviour until a later sign-in succeeds.
+///
+/// A hung network request would otherwise block the main thread before
+/// `runApp` — so a timeout is as important as the error path here. The two
+/// outcomes are logged with distinct messages so future logs are diagnosable.
+@visibleForTesting
+Future<void> boundedSignIn(
+  Future<void> Function() signIn, {
+  Duration timeout = kSignInTimeout,
+}) async {
+  try {
+    await signIn().timeout(timeout);
+  } on TimeoutException {
+    debugPrint(
+      'Anonymous sign-in timed out after ${timeout.inSeconds}s — '
+      'launching signed out; AI features will degrade until it succeeds.',
+    );
+  } catch (e) {
+    debugPrint('Anonymous sign-in failed: $e');
+  }
+}
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -29,12 +60,11 @@ Future<void> main() async {
   );
   final supabase = Supabase.instance.client;
   if (supabase.auth.currentUser == null) {
-    try {
-      await supabase.auth.signInAnonymously();
-    } catch (e) {
-      // Offline on first launch — AI features will fail gracefully.
-      debugPrint('Anonymous sign-in failed: $e');
-    }
+    // Bounded, single attempt: the app always reaches runApp below, whether
+    // sign-in succeeds, times out, or fails. AI features degrade to their
+    // signed-out behaviour until a sign-in succeeds. Kept before runApp so the
+    // onboarding gate's startup ordering is preserved.
+    await boundedSignIn(() => supabase.auth.signInAnonymously());
   }
 
   // Decide the first-frame route BEFORE runApp so onboarding (or the dashboard)

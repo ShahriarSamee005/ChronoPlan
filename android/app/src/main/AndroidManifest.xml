@@ -18,7 +18,7 @@
         tools:ignore="ProtectedPermissions"/>
 
     <application
-        android:label="chronoplan"
+        android:label="ChronoPlan"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
 

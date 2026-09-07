@@ -1,4 +1,4 @@
-package com.example.chronoplan
+package dev.chronoplan.app
 
 import android.app.AppOpsManager
 import android.app.usage.UsageEvents
