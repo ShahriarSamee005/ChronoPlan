@@ -11,6 +11,7 @@ import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../dashboard/widgets/weekly_insight_card.dart';
+import '../shell/app_shell.dart';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -227,7 +228,7 @@ class _WeekBody extends StatelessWidget {
     final days = List.generate(7, (i) => weekStart.add(Duration(days: i)));
 
     return ListView(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 120),
+      padding: EdgeInsets.fromLTRB(16, 4, 16, NavBarMetrics.clearance(context)),
       children: [
         // ── Trend summary ──────────────────────────────────────────────
         _TrendRow(entries: entries, prevEntries: prevEntries, cats: cats),

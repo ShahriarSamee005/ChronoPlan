@@ -81,7 +81,7 @@ class SleepModeCard extends ConsumerWidget {
                 .read(settingsNotifierProvider.notifier)
                 .setSleepMode(active: !sleepActive),
             activeThumbColor: Colors.white,
-            activeTrackColor: nightAccent,
+            activeTrackColor: AppColors.sleepTrack,
             inactiveThumbColor: Colors.white70,
             inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
           ),

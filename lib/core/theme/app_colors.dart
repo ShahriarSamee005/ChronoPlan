@@ -6,19 +6,19 @@ class AppColors {
   // ── Time-based background gradients ────────────────────────────────────
   // Dark bases — glass reads best on dark backgrounds
   static const _morning = [
-    Color(0xFF2E1A4D), // dusky violet
+    Color(0xFF4A2A5E), // deep plum
     Color(0xFFA83F6E), // rose-pink
-    Color(0xFFF2955C), // warm peach
+    Color(0xFFD97A55), // muted terracotta
   ];
   static const _midday = [
-    Color(0xFF4A2A12), // dark umber
+    Color(0xFF6E3F1C), // toasted brown
     Color(0xFFC56A1F), // burnt orange
-    Color(0xFFF0AD3E), // golden amber
+    Color(0xFFD9932F), // amber gold
   ];
   static const _evening = [
-    Color(0xFF16324A), // deep teal
+    Color(0xFF25455F), // slate teal
     Color(0xFF2F7CAD), // sky blue
-    Color(0xFF86C4E6), // light cerulean
+    Color(0xFF6BA7C9), // soft cerulean
   ];
   static const _night = [
     Color(0xFF0A1330), // deep navy
@@ -33,13 +33,26 @@ class AppColors {
     return _night;
   }
 
-  // Accent colour per time period — used on FABs and highlights
+  // Accent colour per time period — used on FABs and highlights.
+  // Deliberately near-white: content on top uses [onAccentForHour].
   static Color accentForHour(int hour) {
-    if (hour >= 5 && hour < 11) return const Color(0xFFFF8A65); // warm orange
-    if (hour >= 11 && hour < 17) return const Color(0xFF29B6F6); // sky blue
-    if (hour >= 17 && hour < 21) return const Color(0xFFCE93D8); // lilac
-    return const Color(0xFF7986CB); // soft indigo
+    if (hour >= 5 && hour < 11) return const Color(0xFFFFF3EA); // warm ivory
+    if (hour >= 11 && hour < 17) return const Color(0xFFFFF6E8); // pale cream
+    if (hour >= 17 && hour < 21) return const Color(0xFFEFF6FA); // cool porcelain
+    return const Color(0xFFEDF0F7); // soft moonlight
   }
+
+  /// Foreground colour for content drawn ON TOP of [accentForHour].
+  static Color onAccentForHour(int hour) {
+    if (hour >= 5 && hour < 11) return const Color(0xFF4A2A5E); // deep plum
+    if (hour >= 11 && hour < 17) return const Color(0xFF6E3F1C); // toasted brown
+    if (hour >= 17 && hour < 21) return const Color(0xFF25455F); // slate teal
+    return const Color(0xFF0A1330); // deep navy
+  }
+
+  /// Active track colour for the sleep switches. Deliberately NOT the
+  /// time-of-day accent: those are near-white, and the switch thumb is white.
+  static const Color sleepTrack = Color(0xFF7986CB);
 
   // ── Category palette — 10 curated, colorblind-aware colours ───────────
   // Works at both full and low opacity for chart fills

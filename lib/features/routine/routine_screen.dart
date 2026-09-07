@@ -12,6 +12,7 @@ import '../../providers/database_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../day_view/hour_row_planner.dart';
+import '../shell/app_shell.dart';
 import 'routine_plan_adapter.dart';
 
 class RoutineScreen extends ConsumerStatefulWidget {
@@ -190,6 +191,7 @@ class _RoutineScreenState extends ConsumerState<RoutineScreen> {
                       onEmptyHourTap: (h) => _openSheet(startHour: h),
                       backgroundLayers: null,
                       foregroundLayers: null,
+                      bottomPadding: NavBarMetrics.clearance(context),
                     );
                   },
                   loading: () =>
@@ -490,13 +492,17 @@ class _SlotSheetState extends ConsumerState<_SlotSheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           AppColors.accentForHour(DateTime.now().hour),
+                      foregroundColor:
+                          AppColors.onAccentForHour(DateTime.now().hour),
                     ),
                     child: _saving
-                        ? const SizedBox(
+                        ? SizedBox(
                             width: 18,
                             height: 18,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2,
+                                color: AppColors.onAccentForHour(
+                                    DateTime.now().hour)),
                           )
                         : const Text('Save slot'),
                   ),

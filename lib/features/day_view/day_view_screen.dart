@@ -13,6 +13,7 @@ import '../../providers/log_entries_provider.dart';
 import '../../providers/routine_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
 import '../log_entry/log_entry_sheet.dart';
+import '../shell/app_shell.dart';
 import 'hour_row_planner.dart';
 import 'routine_overlay_planner.dart';
 
@@ -238,6 +239,7 @@ class _DayViewScreenState extends ConsumerState<DayViewScreen> {
                   if (!(isToday && now.hour == hour)) return const <Widget>[];
                   return _nowLine(rowH, now);
                 },
+                bottomPadding: NavBarMetrics.clearance(context),
               );
             },
             loading: () => const Center(child: CircularProgressIndicator()),

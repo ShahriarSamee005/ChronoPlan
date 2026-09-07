@@ -11,6 +11,7 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/database_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../log_entry/log_entry_sheet.dart';
+import '../shell/app_shell.dart';
 import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
@@ -139,7 +140,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       body: TimeGradientBackground(
         child: SafeArea(
           child: ListView(
-            padding: const EdgeInsets.fromLTRB(16, 12, 16, 120),
+            padding: EdgeInsets.fromLTRB(
+                16, 12, 16, NavBarMetrics.clearance(context)),
             children: [
               const CurrentHourCard(),
               const SizedBox(height: 12),

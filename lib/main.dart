@@ -13,7 +13,9 @@ import 'router.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
-  // Open DB early so migrations + default seeds complete before first frame.
+  // Construct the DB instance eagerly, but note the connection opens lazily:
+  // _openConnection() returns a LazyDatabase, so migrations + default seeds run
+  // on the first query, not here at startup.
   final db = AppDatabase();
 
   // Initialise notifications (registers Android channel, sets up tap stream).

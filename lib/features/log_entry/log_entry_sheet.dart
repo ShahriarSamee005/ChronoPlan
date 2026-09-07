@@ -356,13 +356,17 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor:
                           AppColors.accentForHour(_startTime.hour),
+                      foregroundColor:
+                          AppColors.onAccentForHour(_startTime.hour),
                     ),
                     child: _isSaving
-                        ? const SizedBox(
+                        ? SizedBox(
                             height: 18,
                             width: 18,
                             child: CircularProgressIndicator(
-                                strokeWidth: 2, color: Colors.white),
+                                strokeWidth: 2,
+                                color: AppColors.onAccentForHour(
+                                    _startTime.hour)),
                           )
                         : const Text('Save entry'),
                   ),
@@ -1063,7 +1067,7 @@ class _SleepToggleRow extends ConsumerWidget {
               .read(settingsNotifierProvider.notifier)
               .setSleepMode(active: !sleepActive),
           activeThumbColor: Colors.white,
-          activeTrackColor: nightAccent,
+          activeTrackColor: AppColors.sleepTrack,
           inactiveThumbColor: Colors.white54,
           inactiveTrackColor: Colors.white.withValues(alpha: 0.12),
         ),

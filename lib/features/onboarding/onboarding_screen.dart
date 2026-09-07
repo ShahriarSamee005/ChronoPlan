@@ -117,6 +117,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                             onPressed: _leave,
                             style: ElevatedButton.styleFrom(
                               backgroundColor: accent,
+                              foregroundColor: AppColors.onAccentForHour(
+                                  DateTime.now().hour),
                             ),
                             child: const Text('Get started'),
                           )

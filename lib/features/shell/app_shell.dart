@@ -8,6 +8,23 @@ import '../../core/theme/app_colors.dart';
 import '../../providers/intention_tasks_provider.dart';
 import '../log_entry/log_entry_sheet.dart';
 
+/// Floating nav pill dimensions. Screens under the shell must clear this.
+class NavBarMetrics {
+  const NavBarMetrics._();
+  static const double height = 64;
+  static const double bottomMargin = 12;
+  static const double horizontalMargin = 16;
+  static const double radius = 32;
+
+  /// Breathing room between the last item and the pill.
+  static const double contentGap = 16;
+
+  /// Bottom padding a scrollable under the shell needs so its last row
+  /// is not hidden by the floating pill.
+  static double clearance(BuildContext context) =>
+      height + bottomMargin + contentGap + MediaQuery.of(context).padding.bottom;
+}
+
 /// Persists for the whole app session (created once at the ShellRoute,
 /// never popped — full-page routes like /debrief are pushed on top of it,
 /// not in place of it), which is why the across-midnight lifecycle observer
@@ -99,19 +116,26 @@ class _GlassNavBar extends StatelessWidget {
     final bottom = MediaQuery.of(context).padding.bottom;
     final accent = AppColors.accentForHour(DateTime.now().hour);
 
-    return ClipRect(
-      child: BackdropFilter(
-        filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
-        child: Container(
-          height: 64 + bottom,
-          decoration: const BoxDecoration(
-            border: Border(
-              top: BorderSide(color: AppColors.glassBorder, width: 0.5),
+    return Padding(
+      padding: EdgeInsets.only(
+        left: NavBarMetrics.horizontalMargin,
+        right: NavBarMetrics.horizontalMargin,
+        bottom: NavBarMetrics.bottomMargin + bottom,
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(NavBarMetrics.radius),
+        child: BackdropFilter(
+          filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
+          child: Container(
+            height: NavBarMetrics.height,
+            decoration: BoxDecoration(
+              // The pill now sits over the gradient on all sides, so labels need
+              // a slightly stronger surface than the old flush bar (~12% white).
+              color: const Color(0x1FFFFFFF),
+              border: Border.all(color: AppColors.glassBorder, width: 0.5),
+              borderRadius: BorderRadius.circular(NavBarMetrics.radius),
             ),
-            color: Color(0x14FFFFFF), // ~8% white
-          ),
-          padding: EdgeInsets.only(bottom: bottom),
-          child: Row(
+            child: Row(
             children: [
               _NavItem(
                 icon: Icons.home_outlined,
@@ -142,14 +166,15 @@ class _GlassNavBar extends StatelessWidget {
                         shape: BoxShape.circle,
                         boxShadow: [
                           BoxShadow(
-                            color: accent.withValues(alpha: 0.45),
+                            color: accent.withValues(alpha: 0.18),
                             blurRadius: 12,
                             spreadRadius: 1,
                           ),
                         ],
                       ),
-                      child: const Icon(Icons.add_rounded,
-                          color: Colors.white, size: 28),
+                      child: Icon(Icons.add_rounded,
+                          color: AppColors.onAccentForHour(DateTime.now().hour),
+                          size: 28),
                     ),
                   ),
                 ),
@@ -171,6 +196,7 @@ class _GlassNavBar extends StatelessWidget {
                 onTap: onTap,
               ),
             ],
+            ),
           ),
         ),
       ),

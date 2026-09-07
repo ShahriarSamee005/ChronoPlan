@@ -37,6 +37,11 @@ class HourTimeline extends StatelessWidget {
   final List<Widget> Function(int hour, double trackWidth, double rowHeight)?
       foregroundLayers;
 
+  /// Bottom scroll padding so the last hour clears whatever floats over it.
+  /// Callers under the shell pass the floating nav's clearance; the default
+  /// preserves the original flush-bar value.
+  final double bottomPadding;
+
   const HourTimeline({
     super.key,
     required this.rows,
@@ -49,6 +54,7 @@ class HourTimeline extends StatelessWidget {
     this.onEmptyHourTap,
     this.backgroundLayers,
     this.foregroundLayers,
+    this.bottomPadding = 100,
   });
 
   /// The planner guarantees one uniform `laneCount` across an hour's segments.
@@ -66,7 +72,7 @@ class HourTimeline extends StatelessWidget {
       controller: scrollController,
       // Rows vary in height with their lane count, so no itemExtent.
       itemCount: 24,
-      padding: const EdgeInsets.only(bottom: 100),
+      padding: EdgeInsets.only(bottom: bottomPadding),
       itemBuilder: (_, h) => _HourRow(
         hour: h,
         segments: rows[h],
