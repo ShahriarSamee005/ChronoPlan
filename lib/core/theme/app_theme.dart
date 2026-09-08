@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
 
 import 'app_colors.dart';
 
@@ -8,7 +7,7 @@ class AppTheme {
 
   static ThemeData get dark {
     final base = ThemeData.dark();
-    final manrope = GoogleFonts.manropeTextTheme(base.textTheme);
+    final manrope = base.textTheme.apply(fontFamily: 'Manrope');
 
     return base.copyWith(
       scaffoldBackgroundColor: Colors.transparent,
@@ -19,30 +18,38 @@ class AppTheme {
         error: Color(0xFFFF6B6B),
       ),
       textTheme: manrope.copyWith(
-        displayLarge: GoogleFonts.manrope(
+        displayLarge: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w800,
           fontSize: 32,
         ),
-        titleLarge: GoogleFonts.manrope(
+        titleLarge: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 20,
         ),
-        titleMedium: GoogleFonts.manrope(
+        titleMedium: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textPrimary,
           fontWeight: FontWeight.w600,
           fontSize: 16,
         ),
-        bodyLarge: GoogleFonts.manrope(
+        bodyLarge: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textSecondary,
+          fontWeight: FontWeight.w400,
           fontSize: 16,
         ),
-        bodyMedium: GoogleFonts.manrope(
+        bodyMedium: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textSecondary,
+          fontWeight: FontWeight.w400,
           fontSize: 14,
         ),
-        labelSmall: GoogleFonts.manrope(
+        labelSmall: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textMuted,
           fontSize: 11,
           fontWeight: FontWeight.w500,
@@ -69,12 +76,16 @@ class AppTheme {
             width: 1.5,
           ),
         ),
-        hintStyle: GoogleFonts.manrope(
+        hintStyle: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textMuted,
+          fontWeight: FontWeight.w400,
           fontSize: 14,
         ),
-        labelStyle: GoogleFonts.manrope(
+        labelStyle: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textSecondary,
+          fontWeight: FontWeight.w400,
           fontSize: 14,
         ),
         contentPadding: const EdgeInsets.symmetric(
@@ -93,7 +104,8 @@ class AppTheme {
             horizontal: 24,
             vertical: 14,
           ),
-          textStyle: GoogleFonts.manrope(
+          textStyle: const TextStyle(
+            fontFamily: 'Manrope',
             fontWeight: FontWeight.w600,
             fontSize: 15,
           ),
@@ -106,7 +118,8 @@ class AppTheme {
             const Color(0xFF4E9AF1).withValues(alpha: 0.25),
         disabledColor: AppColors.glassHighlight,
         side: const BorderSide(color: AppColors.glassBorder),
-        labelStyle: GoogleFonts.manrope(
+        labelStyle: const TextStyle(
+          fontFamily: 'Manrope',
           color: AppColors.textSecondary,
           fontSize: 12,
           fontWeight: FontWeight.w500,
