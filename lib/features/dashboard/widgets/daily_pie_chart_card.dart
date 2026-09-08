@@ -7,6 +7,35 @@ import '../../../core/theme/glass_card.dart';
 import '../../../providers/categories_provider.dart';
 import '../../../providers/log_entries_provider.dart';
 
+// ── Pie geometry ──────────────────────────────────────────────────────────────
+
+/// Radius of the donut hole. fl_chart draws each section outward from here, so
+/// the donut's outer radius is [kPieCenterSpace] + a section's `radius`.
+const double kPieCenterSpace = 34;
+
+/// Extra radius a section gains while touched. The layout must reserve this so
+/// the pie never grows past its slot on tap.
+const double kPieTouchGrowth = 12;
+
+/// Clamp bounds for [pieRadiusFor]: a floor so a tiny slot never yields a
+/// negative radius, and a ceiling so a wide tablet slot never yields an
+/// absurdly large donut.
+const double kPieRadiusFloor = 8;
+const double kPieRadiusCeiling = 120;
+
+/// 2px breathing room between the touched donut's edge and its slot.
+const double _kPieSafety = 2;
+
+/// The untouched section radius that fits a chart slot [chartWidth] px wide,
+/// leaving room for the touched state to grow by [kPieTouchGrowth] plus
+/// [_kPieSafety]. The donut's touched diameter is
+/// `2 * (kPieCenterSpace + result + kPieTouchGrowth)`, which stays within
+/// `chartWidth` by construction. Clamped to [kPieRadiusFloor]..[kPieRadiusCeiling].
+double pieRadiusFor(double chartWidth) {
+  final fit = chartWidth / 2 - kPieCenterSpace - kPieTouchGrowth - _kPieSafety;
+  return fit.clamp(kPieRadiusFloor, kPieRadiusCeiling);
+}
+
 class DailyPieChartCard extends ConsumerWidget {
   const DailyPieChartCard({super.key});
 
@@ -62,37 +91,48 @@ class _ChartBodyState extends State<_ChartBody> {
           style: Theme.of(context).textTheme.labelSmall,
         ),
         const SizedBox(height: 16),
-        SizedBox(
-          height: 190,
-          child: Row(
-            children: [
-              Expanded(
-                flex: 3,
-                child: PieChart(
-                  PieChartData(
-                    pieTouchData: PieTouchData(
-                      touchCallback: (event, response) {
-                        setState(() {
-                          _touchedIndex = response
-                                  ?.touchedSection
-                                  ?.touchedSectionIndex ??
-                              -1;
-                        });
-                      },
+        // No fixed height: the row grows to the taller of the chart square and
+        // the (uncapped) legend, so more categories simply make the card taller.
+        // It lives in a ListView, so the extra height scrolls for free.
+        LayoutBuilder(
+          builder: (context, constraints) {
+            // Same 3:2 flex split and 12px gap that the Row uses below, so the
+            // measured width matches the chart's real slot.
+            final chartWidth = (constraints.maxWidth - 12) * 3 / 5;
+            final radius = pieRadiusFor(chartWidth);
+            return Row(
+              children: [
+                Expanded(
+                  flex: 3,
+                  child: SizedBox(
+                    height: chartWidth, // square: the chart fills its slot
+                    child: PieChart(
+                      PieChartData(
+                        pieTouchData: PieTouchData(
+                          touchCallback: (event, response) {
+                            setState(() {
+                              _touchedIndex = response
+                                      ?.touchedSection
+                                      ?.touchedSectionIndex ??
+                                  -1;
+                            });
+                          },
+                        ),
+                        sections: _buildSections(data, totalMin, radius),
+                        centerSpaceRadius: kPieCenterSpace,
+                        sectionsSpace: 2,
+                      ),
                     ),
-                    sections: _buildSections(data, totalMin),
-                    centerSpaceRadius: 34,
-                    sectionsSpace: 2,
                   ),
                 ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                flex: 2,
-                child: _Legend(data: data, totalMin: totalMin),
-              ),
-            ],
-          ),
+                const SizedBox(width: 12),
+                Expanded(
+                  flex: 2,
+                  child: _Legend(data: data, totalMin: totalMin),
+                ),
+              ],
+            );
+          },
         ),
       ],
     );
@@ -101,6 +141,7 @@ class _ChartBodyState extends State<_ChartBody> {
   List<PieChartSectionData> _buildSections(
     List<({dynamic cat, Duration dur})> data,
     int totalMin,
+    double radius,
   ) {
     return List.generate(data.length, (i) {
       final item = data[i];
@@ -110,7 +151,7 @@ class _ChartBodyState extends State<_ChartBody> {
         value: item.dur.inMinutes.toDouble(),
         color: Color(item.cat.colorValue as int)
             .withValues(alpha: isTouched ? 1.0 : 0.82),
-        radius: isTouched ? 82 : 70,
+        radius: isTouched ? radius + kPieTouchGrowth : radius,
         title: isTouched ? '${pct.round()}%' : '',
         titleStyle: const TextStyle(
           color: Colors.white,
