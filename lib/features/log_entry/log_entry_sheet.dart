@@ -58,8 +58,7 @@ List<int> computeMissedHours(List<LogEntry> entries, {DateTime? now}) {
 }) {
   final anchor = DateTime(day.year, day.month, day.day);
   if (initialHour != null) {
-    final start =
-        DateTime(anchor.year, anchor.month, anchor.day, initialHour);
+    final start = DateTime(anchor.year, anchor.month, anchor.day, initialHour);
     return (start: start, end: start.add(const Duration(hours: 1)));
   }
   final reference = now ?? DateTime.now();
@@ -73,6 +72,12 @@ List<int> computeMissedHours(List<LogEntry> entries, {DateTime? now}) {
   }
   return (start: start, end: start.add(const Duration(hours: 1)));
 }
+
+/// The log entry sheet opens at, and never exceeds, this fraction of the screen
+/// height, so a strip of screen stays visible above it and it never sits in
+/// Android's notification-shade gesture zone. The keyboard is the one allowed
+/// exception (the root `viewInsets.bottom` padding sits outside the cap).
+const double kLogSheetMaxHeightFraction = 0.85;
 
 class LogEntrySheet extends ConsumerStatefulWidget {
   final LogEntry? existing;
@@ -158,204 +163,225 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
 
     return Padding(
       padding: EdgeInsets.only(bottom: bottom),
-      child: GlassCard(
-        borderRadius: 28,
-        opacity: 0.20,
-        blurSigma: 16,
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
-          child: SingleChildScrollView(
+      // Cap the sheet at 85% of the screen so a strip stays visible above it and
+      // it never reaches y=0 into Android's shade gesture zone. The cap sits
+      // INSIDE the keyboard-inset Padding, so the existing viewInsets lift is
+      // unaffected — with the keyboard open the whole sheet still rides up above
+      // it. The inner SingleChildScrollView shrink-wraps when content is short
+      // and scrolls once it would exceed the cap.
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight:
+              MediaQuery.of(context).size.height * kLogSheetMaxHeightFraction,
+        ),
+        child: GlassCard(
+          borderRadius: 28,
+          opacity: 0.20,
+          blurSigma: 16,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 12, 20, 32),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Drag handle
-                Center(
-                  child: Container(
-                    width: 36,
-                    height: 4,
-                    margin: const EdgeInsets.only(bottom: 16),
-                    decoration: BoxDecoration(
-                      color: AppColors.textMuted,
-                      borderRadius: BorderRadius.circular(2),
-                    ),
-                  ),
-                ),
-
-                // ── Sleep toggle ──────────────────────────────────────────
-                const _SleepToggleRow(),
-                const SizedBox(height: 14),
-
-                // ── Missed hours strip ────────────────────────────────────
-                if (missedHours.isNotEmpty) ...[
-                  _MissedHoursStrip(
-                    hours: missedHours,
-                    selectedHour: _startTime.hour,
-                    onTap: (h) {
-                      setState(() {
-                        _startTime = _day.add(Duration(hours: h));
-                        final end = _startTime.add(const Duration(hours: 1));
-                        // Clamp only ever bites on today; a past-day end is
-                        // never after now.
-                        _endTime = end.isAfter(now) ? now : end;
-                      });
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                ],
-
-                // ── Header ───────────────────────────────────────────────
-                if (widget.existing == null)
-                  Text(
-                    'Logging: ${_fmt(_startTime)} – ${_fmt(_endTime)}',
-                    style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 21,
-                      fontWeight: FontWeight.w800,
-                      letterSpacing: -0.3,
-                    ),
-                  )
-                else
-                  const Text(
-                    'Edit Entry',
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 21,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                const SizedBox(height: 20),
-
-                // ── Time range ────────────────────────────────────────────
-                Row(
-                  children: [
-                    Expanded(
-                      child: _TimeButton(
-                        label: 'Start',
-                        time: _startTime,
-                        onTap: () => _pickTime(isStart: true),
-                      ),
-                    ),
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 10),
-                      child: Icon(
-                        Icons.arrow_forward_rounded,
-                        color: AppColors.textMuted,
-                        size: 18,
-                      ),
-                    ),
-                    Expanded(
-                      child: _TimeButton(
-                        label: 'End',
-                        time: _endTime,
-                        onTap: () => _pickTime(isStart: false),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-
-                // ── Description ───────────────────────────────────────────
-                TextField(
-                  controller: _descCtrl,
-                  decoration: InputDecoration(
-                    hintText: 'What were you doing?',
-                    labelText: 'Description',
-                    suffixIcon: catsAsync.hasValue
-                        ? IconButton(
-                            icon: const Icon(Icons.auto_awesome_rounded,
-                                size: 18),
-                            color: Colors.white54,
-                            tooltip: 'Parse from text',
-                            onPressed: () =>
-                                _showParseSheet(catsAsync.value!),
-                          )
-                        : null,
-                  ),
-                  textCapitalization: TextCapitalization.sentences,
-                  maxLines: 2,
-                ),
-                // B5 suggestion chip
-                if (_isSuggesting)
-                  const Padding(
-                    padding: EdgeInsets.only(top: 6, left: 2),
-                    child: Row(
+                // Scrolling content — everything above the pinned Save button.
+                Flexible(
+                  child: SingleChildScrollView(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        SizedBox(
-                          width: 10,
-                          height: 10,
-                          child: CircularProgressIndicator(
-                              strokeWidth: 1.5, color: Colors.white38),
-                        ),
-                        SizedBox(width: 6),
-                        Text('Suggesting category…',
-                            style: TextStyle(
-                                color: Colors.white38, fontSize: 11)),
-                      ],
-                    ),
-                  )
-                else if (_suggestedCategoryName != null)
-                  _buildSuggestionChip(
-                      _suggestedCategoryName!,
-                      catsAsync.valueOrNull ?? []),
-                const SizedBox(height: 16),
-
-                // ── Category chips ────────────────────────────────────────
-                const Text(
-                  'CATEGORY',
-                  style: TextStyle(
-                    color: AppColors.textMuted,
-                    fontSize: 10,
-                    fontWeight: FontWeight.w600,
-                    letterSpacing: 1.2,
-                  ),
-                ),
-                const SizedBox(height: 8),
-                catsAsync.when(
-                  data: (cats) => Wrap(
-                    spacing: 8,
-                    runSpacing: 6,
-                    children: cats
-                        .where((c) => !c.isArchived)
-                        .map((cat) {
-                      final selected = _selectedCategoryId == cat.id;
-                      return FilterChip(
-                        label: Text(cat.name),
-                        selected: selected,
-                        onSelected: (_) => setState(() {
-                          _selectedCategoryId = selected ? null : cat.id;
-                        }),
-                        avatar: Container(
-                          width: 8,
-                          height: 8,
-                          decoration: BoxDecoration(
-                            color: Color(cat.colorValue),
-                            shape: BoxShape.circle,
+                        // Drag handle
+                        Center(
+                          child: Container(
+                            width: 36,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 16),
+                            decoration: BoxDecoration(
+                              color: AppColors.textMuted,
+                              borderRadius: BorderRadius.circular(2),
+                            ),
                           ),
                         ),
-                        selectedColor:
-                            Color(cat.colorValue).withValues(alpha: 0.22),
-                        checkmarkColor: Color(cat.colorValue),
-                      );
-                    }).toList(),
+
+                        // ── Sleep toggle ──────────────────────────────────────────
+                        const _SleepToggleRow(),
+                        const SizedBox(height: 14),
+
+                        // ── Missed hours strip ────────────────────────────────────
+                        if (missedHours.isNotEmpty) ...[
+                          _MissedHoursStrip(
+                            hours: missedHours,
+                            selectedHour: _startTime.hour,
+                            onTap: (h) {
+                              setState(() {
+                                _startTime = _day.add(Duration(hours: h));
+                                final end =
+                                    _startTime.add(const Duration(hours: 1));
+                                // Clamp only ever bites on today; a past-day end is
+                                // never after now.
+                                _endTime = end.isAfter(now) ? now : end;
+                              });
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+
+                        // ── Header ───────────────────────────────────────────────
+                        if (widget.existing == null)
+                          Text(
+                            'Logging: ${_fmt(_startTime)} – ${_fmt(_endTime)}',
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
+                            ),
+                          )
+                        else
+                          const Text(
+                            'Edit Entry',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 21,
+                              fontWeight: FontWeight.w700,
+                            ),
+                          ),
+                        const SizedBox(height: 20),
+
+                        // ── Time range ────────────────────────────────────────────
+                        Row(
+                          children: [
+                            Expanded(
+                              child: _TimeButton(
+                                label: 'Start',
+                                time: _startTime,
+                                onTap: () => _pickTime(isStart: true),
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.symmetric(horizontal: 10),
+                              child: Icon(
+                                Icons.arrow_forward_rounded,
+                                color: AppColors.textMuted,
+                                size: 18,
+                              ),
+                            ),
+                            Expanded(
+                              child: _TimeButton(
+                                label: 'End',
+                                time: _endTime,
+                                onTap: () => _pickTime(isStart: false),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 16),
+
+                        // ── Description ───────────────────────────────────────────
+                        TextField(
+                          controller: _descCtrl,
+                          decoration: InputDecoration(
+                            hintText: 'What were you doing?',
+                            labelText: 'Description',
+                            suffixIcon: catsAsync.hasValue
+                                ? IconButton(
+                                    icon: const Icon(Icons.auto_awesome_rounded,
+                                        size: 18),
+                                    color: Colors.white54,
+                                    tooltip: 'Parse from text',
+                                    onPressed: () =>
+                                        _showParseSheet(catsAsync.value!),
+                                  )
+                                : null,
+                          ),
+                          textCapitalization: TextCapitalization.sentences,
+                          maxLines: 2,
+                        ),
+                        // B5 suggestion chip
+                        if (_isSuggesting)
+                          const Padding(
+                            padding: EdgeInsets.only(top: 6, left: 2),
+                            child: Row(
+                              children: [
+                                SizedBox(
+                                  width: 10,
+                                  height: 10,
+                                  child: CircularProgressIndicator(
+                                      strokeWidth: 1.5, color: Colors.white38),
+                                ),
+                                SizedBox(width: 6),
+                                Text('Suggesting category…',
+                                    style: TextStyle(
+                                        color: Colors.white38, fontSize: 11)),
+                              ],
+                            ),
+                          )
+                        else if (_suggestedCategoryName != null)
+                          _buildSuggestionChip(_suggestedCategoryName!,
+                              catsAsync.valueOrNull ?? []),
+                        const SizedBox(height: 16),
+
+                        // ── Category chips ────────────────────────────────────────
+                        const Text(
+                          'CATEGORY',
+                          style: TextStyle(
+                            color: AppColors.textMuted,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        catsAsync.when(
+                          data: (cats) => Wrap(
+                            spacing: 8,
+                            runSpacing: 6,
+                            children:
+                                cats.where((c) => !c.isArchived).map((cat) {
+                              final selected = _selectedCategoryId == cat.id;
+                              return FilterChip(
+                                label: Text(cat.name),
+                                selected: selected,
+                                onSelected: (_) => setState(() {
+                                  _selectedCategoryId =
+                                      selected ? null : cat.id;
+                                }),
+                                avatar: Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: Color(cat.colorValue),
+                                    shape: BoxShape.circle,
+                                  ),
+                                ),
+                                selectedColor: Color(cat.colorValue)
+                                    .withValues(alpha: 0.22),
+                                checkmarkColor: Color(cat.colorValue),
+                              );
+                            }).toList(),
+                          ),
+                          loading: () => const SizedBox(
+                            height: 32,
+                            child: Center(
+                                child:
+                                    CircularProgressIndicator(strokeWidth: 2)),
+                          ),
+                          error: (_, __) => const SizedBox.shrink(),
+                        ),
+                      ],
+                    ),
                   ),
-                  loading: () => const SizedBox(
-                    height: 32,
-                    child:
-                        Center(child: CircularProgressIndicator(strokeWidth: 2)),
-                  ),
-                  error: (_, __) => const SizedBox.shrink(),
                 ),
                 const SizedBox(height: 24),
 
-                // ── Save ──────────────────────────────────────────────────
+                // ── Save (pinned below the scrolling content) ─────────────
                 SizedBox(
                   width: double.infinity,
                   child: ElevatedButton(
                     onPressed: _isSaving ? null : _save,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor:
-                          AppColors.accentForHour(_startTime.hour),
+                      backgroundColor: AppColors.accentForHour(_startTime.hour),
                       foregroundColor:
                           AppColors.onAccentForHour(_startTime.hour),
                     ),
@@ -365,8 +391,8 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
                             width: 18,
                             child: CircularProgressIndicator(
                                 strokeWidth: 2,
-                                color: AppColors.onAccentForHour(
-                                    _startTime.hour)),
+                                color:
+                                    AppColors.onAccentForHour(_startTime.hour)),
                           )
                         : const Text('Save entry'),
                   ),
@@ -390,8 +416,8 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
     if (picked == null || !mounted) return;
 
     final now = DateTime.now();
-    final updated = DateTime(
-        base.year, base.month, base.day, picked.hour, picked.minute);
+    final updated =
+        DateTime(base.year, base.month, base.day, picked.hour, picked.minute);
 
     if (updated.isAfter(now)) {
       _showSnack('Cannot log future time.');
@@ -504,8 +530,9 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   }
 
   Widget _buildSuggestionChip(String name, List<Category> cats) {
-    final cat =
-        cats.where((c) => c.name.toLowerCase() == name.toLowerCase()).firstOrNull;
+    final cat = cats
+        .where((c) => c.name.toLowerCase() == name.toLowerCase())
+        .firstOrNull;
     if (cat == null) return const SizedBox.shrink();
     return Padding(
       padding: const EdgeInsets.only(top: 6, left: 2),
@@ -668,8 +695,8 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
       _confirmMessage = null;
     });
     final catNames = widget.cats.map((c) => c.name).toList();
-    final result = await widget.service
-        .parseLogText(text, widget.anchorTime, catNames);
+    final result =
+        await widget.service.parseLogText(text, widget.anchorTime, catNames);
     if (mounted) {
       setState(() {
         _isParsing = false;
@@ -745,7 +772,8 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
           children: [
             Center(
               child: Container(
-                width: 36, height: 4,
+                width: 36,
+                height: 4,
                 margin: const EdgeInsets.only(bottom: 16),
                 decoration: BoxDecoration(
                     color: Colors.white24,
@@ -787,8 +815,7 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                 style: const TextStyle(color: Colors.white),
                 maxLines: 4,
                 decoration: InputDecoration(
-                  hintText:
-                      'e.g. "worked 2h, then lunch 30min, meeting 1h…"',
+                  hintText: 'e.g. "worked 2h, then lunch 30min, meeting 1h…"',
                   hintStyle: const TextStyle(color: Colors.white30),
                   filled: true,
                   fillColor: Colors.white.withValues(alpha: 0.07),
@@ -812,7 +839,8 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                   onPressed: _isParsing ? null : _parse,
                   icon: _isParsing
                       ? const SizedBox(
-                          width: 16, height: 16,
+                          width: 16,
+                          height: 16,
                           child: CircularProgressIndicator(
                               color: Colors.white, strokeWidth: 2))
                       : const Icon(Icons.auto_awesome_rounded, size: 16),
@@ -837,19 +865,20 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                     : null;
                 return Container(
                   margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 10),
+                  padding:
+                      const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
                     color: Colors.white.withValues(alpha: 0.06),
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                        color: Colors.white.withValues(alpha: 0.10)),
+                    border:
+                        Border.all(color: Colors.white.withValues(alpha: 0.10)),
                   ),
                   child: Row(
                     children: [
                       if (cat != null)
                         Container(
-                          width: 10, height: 10,
+                          width: 10,
+                          height: 10,
                           margin: const EdgeInsets.only(right: 10),
                           decoration: BoxDecoration(
                             color: Color(cat.colorValue),
@@ -893,8 +922,7 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                         side: const BorderSide(color: Colors.white24),
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: const Text('Re-try'),
                     ),
@@ -907,8 +935,7 @@ class _ParseSheetState extends ConsumerState<_ParseSheet> {
                         backgroundColor: accent,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(12)),
-                        padding:
-                            const EdgeInsets.symmetric(vertical: 12),
+                        padding: const EdgeInsets.symmetric(vertical: 12),
                       ),
                       child: _isConfirming
                           ? const SizedBox(
@@ -1054,8 +1081,7 @@ class _SleepToggleRow extends ConsumerWidget {
                 style: TextStyle(
                   color: sleepActive ? Colors.white : Colors.white70,
                   fontSize: 13,
-                  fontWeight:
-                      sleepActive ? FontWeight.w600 : FontWeight.w400,
+                  fontWeight: sleepActive ? FontWeight.w600 : FontWeight.w400,
                 ),
               ),
             ),

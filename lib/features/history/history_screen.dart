@@ -285,6 +285,38 @@ class _WeekBody extends StatelessWidget {
   }
 }
 
+// ── Top category ranking ──────────────────────────────────────────────────────
+
+/// Ranks the week's logged categories by total minutes and returns the leader.
+///
+/// Two things are excluded from this headline only: the Sleep category (it wins
+/// by definition every week), and entries the user logged but never tagged with
+/// a category (`categoryId == null`). Sleep still counts everywhere else — the
+/// chart, the Total figure, the vs-Last-Week delta, drill-downs, and the AI
+/// weekly insight. Returns null when nothing eligible remains, which the row
+/// renders as 'None'.
+///
+/// Sleep is matched by the system flag AND its name: Screen Time is also a
+/// system category, so `isSystem` alone would wrongly exclude it too.
+Category? topCategoryFor(List<LogEntry> entries, List<Category> cats) {
+  final sleepId =
+      cats.where((c) => c.isSystem && c.name == 'Sleep').firstOrNull?.id;
+
+  final catMin = <int?, int>{};
+  for (final e in entries) {
+    if (e.categoryId == null) continue; // uncategorized: not eligible
+    if (e.categoryId == sleepId) continue; // Sleep: not eligible
+    catMin[e.categoryId] = (catMin[e.categoryId] ?? 0) +
+        e.endTime.difference(e.startTime).inMinutes;
+  }
+  final topEntry = catMin.isEmpty
+      ? null
+      : catMin.entries.reduce((a, b) => a.value >= b.value ? a : b);
+  return topEntry != null
+      ? cats.where((c) => c.id == topEntry.key).firstOrNull
+      : null;
+}
+
 // ── Trend summary row ─────────────────────────────────────────────────────────
 
 class _TrendRow extends StatelessWidget {
@@ -305,18 +337,7 @@ class _TrendRow extends StatelessWidget {
     final prevMin = (prevEntries ?? []).fold(
         0, (s, e) => s + e.endTime.difference(e.startTime).inMinutes);
 
-    // Top category by minutes
-    final catMin = <int?, int>{};
-    for (final e in entries) {
-      catMin[e.categoryId] = (catMin[e.categoryId] ?? 0) +
-          e.endTime.difference(e.startTime).inMinutes;
-    }
-    final topEntry = catMin.isEmpty
-        ? null
-        : catMin.entries.reduce((a, b) => a.value >= b.value ? a : b);
-    final topCat = topEntry != null
-        ? cats.where((c) => c.id == topEntry.key).firstOrNull
-        : null;
+    final topCat = topCategoryFor(entries, cats);
 
     final deltaMin = totalMin - prevMin;
     final prevLoaded = prevEntries != null;
