@@ -52,12 +52,19 @@ class UsageStatsService {
       final rawEvents = await _queryRawEvents(dayStart, now);
       final sessions = _reconstructSessions(rawEvents, dayStart, now);
 
-      final totals = <String, int>{}; // packageName → totalMinutes
+      // Sum milliseconds and floor once — same reason as _bucketMinutes: a
+      // sum of per-session floors throws away every sub-minute fragment.
+      final totalMs = <String, int>{}; // packageName → totalMillis
       for (final s in sessions) {
-        final mins = s.minutesOverlapping(dayStart, now);
-        if (mins > 0) {
-          totals[s.packageName] = (totals[s.packageName] ?? 0) + mins;
+        final ms = s.millisOverlapping(dayStart, now);
+        if (ms > 0) {
+          totalMs[s.packageName] = (totalMs[s.packageName] ?? 0) + ms;
         }
+      }
+      final totals = <String, int>{}; // packageName → totalMinutes
+      for (final e in totalMs.entries) {
+        final mins = e.value ~/ Duration.millisecondsPerMinute;
+        if (mins > 0) totals[e.key] = mins;
       }
 
       final appInfo = await _resolveAppInfo(totals.keys.toSet());
@@ -249,11 +256,13 @@ class UsageStatsService {
     /// Emits the current active segment (if the session is accruing) and marks
     /// it suspended. Deliberately leaves `openPkg` alone — the app is still the
     /// anchored foreground app.
-    void suspendOpen(DateTime at, {bool openEnded = false}) {
+    void suspendOpen(DateTime at,
+        {bool openEnded = false, bool barrier = false}) {
       if (openPkg != null && segmentStart != null) {
         _addSession(
           sessions, openPkg!, segmentStart!, at, windowStart, windowEnd,
           openEnded: openEnded,
+          barrier: barrier,
         );
         if (at.isAfter(lastEnd)) lastEnd = at;
       }
@@ -263,8 +272,8 @@ class UsageStatsService {
     /// Emits the active segment (if any) and ends the session for good. A
     /// session that was already suspended emits nothing more — its off-gap
     /// tail belongs to nobody.
-    void closeOpen(DateTime at, {bool openEnded = false}) {
-      suspendOpen(at, openEnded: openEnded);
+    void closeOpen(DateTime at, {bool openEnded = false, bool barrier = false}) {
+      suspendOpen(at, openEnded: openEnded, barrier: barrier);
       openPkg = null;
     }
 
@@ -286,7 +295,7 @@ class UsageStatsService {
       // Shutdown: the device is going away. Full close — nothing after a
       // reboot belongs to the session that was anchored before it.
       if (e.type == _kDeviceShutdown) {
-        closeOpen(e.timestamp);
+        closeOpen(e.timestamp, barrier: true);
         screenOn = false;
         sawAnyOpenOrClose = true;
         continue;
@@ -296,7 +305,7 @@ class UsageStatsService {
       // still the foreground app — it simply stops accruing until the screen
       // comes back on, so the off-gap is credited to nobody.
       if (e.type == _kScreenNonInteractive || e.type == _kKeyguardShown) {
-        suspendOpen(e.timestamp);
+        suspendOpen(e.timestamp, barrier: true);
         screenOn = false;
         sawAnyOpenOrClose = true;
         continue;
@@ -356,7 +365,72 @@ class UsageStatsService {
       closeOpen(capEnd, openEnded: true);
     }
 
-    return sessions;
+    return _mergeAdjacentSessions(sessions);
+  }
+
+  /// Stitches the Activity-level fragments emitted above back into app-level
+  /// sessions.
+  ///
+  /// Android emits FOREGROUND/BACKGROUND per ACTIVITY, not per app, so normal
+  /// in-app navigation (Reels, story viewers, comment sheets, in-app browsers)
+  /// produces a storm of same-package PAUSE/RESUME pairs. Each pair closes and
+  /// reopens the session above, shredding one continuous stretch of use into
+  /// dozens of fragments.
+  ///
+  /// This runs as a POST-PASS over the emitted list rather than inside the
+  /// event walk. The walk is a single-pass state machine whose correctness —
+  /// the lone-BG watermark ladder, the head case, suspend/resume, shutdown —
+  /// is pinned by the existing reconstruction tests; making its FOREGROUND
+  /// branch conditionally not-close for the same package would change
+  /// `openPkg`/`segmentStart` semantics underneath all of them. Operating on
+  /// the output instead leaves every emission rule untouched.
+  ///
+  /// Two sessions merge only when ALL of these hold:
+  ///
+  ///  • Same package. Different apps never merge.
+  ///  • ADJACENT in the emitted list. Sessions are emitted in chronological
+  ///    order, so adjacency is what proves nothing ran in between — another
+  ///    app's session sitting between two same-package fragments breaks the
+  ///    chain and blocks the merge.
+  ///  • The earlier session is not a [_Session.barrier] — it did not end at a
+  ///    screen-off/keyguard suspend or a device shutdown.
+  ///  • The gap between them is at most [_kMergeGapSeconds].
+  ///
+  /// The merged span never grows beyond the two it replaces, so no invariant
+  /// (window containment, non-overlap, per-hour totals) can be weakened by it.
+  List<_Session> _mergeAdjacentSessions(List<_Session> sessions) {
+    if (sessions.length < 2) return sessions;
+
+    const maxGap = Duration(seconds: _kMergeGapSeconds);
+    final merged = <_Session>[];
+
+    for (final s in sessions) {
+      final prev = merged.isEmpty ? null : merged.last;
+
+      if (prev != null &&
+          !prev.barrier &&
+          prev.packageName == s.packageName &&
+          s.start.difference(prev.end) <= maxGap) {
+        // Defensive max(): reconstruction never emits overlapping sessions for
+        // one package, but taking the later end can only ever shrink the total
+        // if it somehow did — never inflate it.
+        final end = s.end.isAfter(prev.end) ? s.end : prev.end;
+        merged[merged.length - 1] = _Session(
+          prev.packageName,
+          prev.start,
+          end,
+          // Openness belongs to the tail: the merged session is open-ended
+          // only if the last fragment was never closed.
+          openEnded: s.openEnded,
+          clamped: prev.clamped || s.clamped,
+          barrier: s.barrier,
+        );
+      } else {
+        merged.add(s);
+      }
+    }
+
+    return merged;
   }
 
   void _addSession(
@@ -367,6 +441,7 @@ class UsageStatsService {
     DateTime windowStart,
     DateTime windowEnd, {
     bool openEnded = false,
+    bool barrier = false,
   }) {
     var start = rawStart;
     var end = rawEnd;
@@ -390,6 +465,7 @@ class UsageStatsService {
         pkg, start, end,
         openEnded: openEnded,
         clamped: clamped,
+        barrier: barrier,
       ));
     }
   }
@@ -410,19 +486,7 @@ class UsageStatsService {
     Map<String, _AppInfo> appInfo, {
     List<UsageGuardViolation>? violations,
   }) {
-    final result = <int, Map<String, int>>{}; // hour → pkg → totalMinutes
-
-    for (final s in sessions) {
-      for (var h = 0; h < maxHour; h++) {
-        final hStart = dayStart.add(Duration(hours: h));
-        final hEnd = hStart.add(const Duration(hours: 1));
-        final mins = s.minutesOverlapping(hStart, hEnd);
-        if (mins > 0) {
-          (result[h] ??= {})[s.packageName] =
-              ((result[h]?[s.packageName]) ?? 0) + mins;
-        }
-      }
-    }
+    final result = _bucketMinutes(sessions, dayStart, maxHour);
 
     // ── Invariant guards (backstop; on correct reconstruction never fire).
     // Clamp always applies so downstream can never exceed physical limits; the
@@ -462,6 +526,50 @@ class UsageStatsService {
         'filtered(belowThreshold)=$filteredBelowThreshold');
 
     return sliced;
+  }
+
+  /// Accumulates `hour → package → whole minutes` for every elapsed hour.
+  ///
+  /// Split out of [_sliceByHour] so the raw, pre-filter totals can be asserted
+  /// directly in tests via [bucketMinutesForTest] — the userFacing and
+  /// minimum-duration filters run on this map afterwards, not inside it.
+  Map<int, Map<String, int>> _bucketMinutes(
+    List<_Session> sessions,
+    DateTime dayStart,
+    int maxHour,
+  ) {
+    // Accumulate MILLISECONDS, not minutes. Flooring each session first and
+    // summing afterwards makes the hour total a sum of floors, which silently
+    // destroys every sub-minute fragment: twelve 10-second sessions are 120
+    // real seconds and used to score 12 × 0 == 0 minutes.
+    final millis = <int, Map<String, int>>{}; // hour → pkg → totalMillis
+
+    for (final s in sessions) {
+      for (var h = 0; h < maxHour; h++) {
+        final hStart = dayStart.add(Duration(hours: h));
+        final hEnd = hStart.add(const Duration(hours: 1));
+        final ms = s.millisOverlapping(hStart, hEnd);
+        if (ms > 0) {
+          (millis[h] ??= {})[s.packageName] =
+              ((millis[h]?[s.packageName]) ?? 0) + ms;
+        }
+      }
+    }
+
+    // Convert to whole minutes exactly ONCE, on the summed total. Packages
+    // that still round to zero are dropped, matching the previous shape of
+    // this map (it never held zero-minute entries).
+    final result = <int, Map<String, int>>{}; // hour → pkg → totalMinutes
+    for (final hourEntry in millis.entries) {
+      final pkgMins = <String, int>{};
+      for (final pkgEntry in hourEntry.value.entries) {
+        final mins = pkgEntry.value ~/ Duration.millisecondsPerMinute;
+        if (mins > 0) pkgMins[pkgEntry.key] = mins;
+      }
+      if (pkgMins.isNotEmpty) result[hourEntry.key] = pkgMins;
+    }
+
+    return result;
   }
 
   /// Clamps the accumulated hour→pkg→minutes map so no invariant is violated,
@@ -577,10 +685,15 @@ class UsageStatsService {
     // Stage C: per-package raw minutes for this hour, then the same
     // userFacing + threshold checks _sliceByHour applies, plus the actual
     // production output for direct comparison.
-    final pkgMins = <String, int>{};
+    final pkgMs = <String, int>{};
     for (final s in allSessions) {
-      final mins = s.minutesOverlapping(hourStart, hourEnd);
-      if (mins > 0) pkgMins[s.packageName] = (pkgMins[s.packageName] ?? 0) + mins;
+      final ms = s.millisOverlapping(hourStart, hourEnd);
+      if (ms > 0) pkgMs[s.packageName] = (pkgMs[s.packageName] ?? 0) + ms;
+    }
+    final pkgMins = <String, int>{};
+    for (final e in pkgMs.entries) {
+      final mins = e.value ~/ Duration.millisecondsPerMinute;
+      if (mins > 0) pkgMins[e.key] = mins;
     }
     final appInfo = await _resolveAppInfo(pkgMins.keys.toSet());
     final stages = pkgMins.entries
@@ -678,6 +791,23 @@ class UsageStatsService {
               clamped: s.clamped,
             ))
         .toList();
+  }
+
+  /// Test-only view of the per-(hour, package) minute totals BEFORE the
+  /// userFacing and minimum-duration filters run. Exists so the bucketing
+  /// arithmetic itself can be asserted on totals that are deliberately below
+  /// [_minDurationMinutes] — which [sliceByHourForTest] would filter away.
+  @visibleForTesting
+  Map<int, Map<String, int>> bucketMinutesForTest(
+    List<DebugSession> sessions,
+    DateTime dayStart,
+    int maxHour,
+  ) {
+    final internal = sessions
+        .map((s) => _Session(s.packageName, s.start, s.end,
+            openEnded: s.openEnded, clamped: s.clamped))
+        .toList();
+    return _bucketMinutes(internal, dayStart, maxHour);
   }
 
   /// Test-only entry point into [_sliceByHour] over synthetic sessions, so the
@@ -834,6 +964,20 @@ const int _kKeyguardHidden = 18;
 /// a completely different event), so shutdowns were silently ignored before.
 const int _kDeviceShutdown = 26;
 
+/// Maximum gap between two consecutive sessions of the SAME package that is
+/// still treated as one continuous stretch of use rather than two.
+///
+/// Sized against what actually produces the gap. An in-app Activity handoff
+/// (Reels swipe, story viewer, comment sheet, in-app browser) emits its PAUSE
+/// and RESUME within the same tick — the gap is zero, or a few hundred
+/// milliseconds of scheduling jitter. Five seconds clears that by an order of
+/// magnitude while staying far below any humanly meaningful break: nobody
+/// leaves an app and returns inside five seconds in a way worth recording as
+/// two separate stretches. Deliberately small — a larger window would start
+/// swallowing real "put the phone down, picked it up again" gaps, and this
+/// pipeline prefers to under-count.
+const int _kMergeGapSeconds = 5;
+
 /// Maximum minutes a head-case lone BACKGROUND may be back-dated to
 /// [windowStart].  A larger gap is implausible as a single since-midnight
 /// session and is dropped rather than counted.
@@ -877,21 +1021,38 @@ class _Session {
   /// session tried to extend past windowEnd. Surfaced in the debug view.
   final bool clamped;
 
+  /// True when this session ended because something GENUINELY interrupted the
+  /// foreground app — a screen-off/keyguard suspend, or a device shutdown —
+  /// rather than an ordinary Activity handoff. A barrier session is never
+  /// merged with whatever follows it, however small the gap and however
+  /// identical the package. See [UsageStatsService._mergeAdjacentSessions].
+  final bool barrier;
+
   const _Session(
     this.packageName,
     this.start,
     this.end, {
     this.openEnded = false,
     this.clamped = false,
+    this.barrier = false,
   });
 
   Duration get duration => end.difference(start);
 
-  /// Returns how many whole minutes of this session fall inside [wStart, wEnd).
-  int minutesOverlapping(DateTime wStart, DateTime wEnd) {
+  /// Returns how many milliseconds of this session fall inside [wStart, wEnd).
+  ///
+  /// This is the accumulation primitive: callers that total several sessions
+  /// MUST sum milliseconds and convert once at the end, never sum the whole
+  /// minutes of each session (see [UsageStatsService._bucketMinutes]).
+  int millisOverlapping(DateTime wStart, DateTime wEnd) {
     final s = start.isBefore(wStart) ? wStart : start;
     final e = end.isAfter(wEnd) ? wEnd : end;
     final ms = e.difference(s).inMilliseconds;
-    return ms > 0 ? ms ~/ 60000 : 0;
+    return ms > 0 ? ms : 0;
   }
+
+  /// Returns how many whole minutes of this session fall inside [wStart, wEnd).
+  /// Safe for a SINGLE session; do not sum this across sessions.
+  int minutesOverlapping(DateTime wStart, DateTime wEnd) =>
+      millisOverlapping(wStart, wEnd) ~/ Duration.millisecondsPerMinute;
 }

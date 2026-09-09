@@ -51,8 +51,20 @@ void main() {
     expect(youtube.durationMinutes, 42);
   });
 
-  test('duplicate FOREGROUND for the same package (dropped BACKGROUND) closes '
-      'and reopens rather than double-counting', () {
+  // Phase 1 (session merging) changed this test's SHAPE, not its guarantee.
+  //
+  // Before: a duplicate FOREGROUND closed the running session and opened a new
+  // one, so this stream emitted two sessions (10 min + 5 min). That split is
+  // the Activity-level fragmentation Phase 1 exists to undo — com.a held the
+  // foreground continuously from 10:00 to 10:15, and nothing interrupted it.
+  // The merge post-pass now stitches the two contiguous fragments back into
+  // one session.
+  //
+  // The invariant this test actually guards is unchanged and still asserted:
+  // the phantom gap must not be double-counted, and the total must be 15 —
+  // NOT the 60 minutes a session left dangling to windowEnd would produce.
+  test('duplicate FOREGROUND for the same package (dropped BACKGROUND) merges '
+      'into one session rather than double-counting', () {
     final events = [
       _e('com.a', _kForeground, windowStart),
       _e('com.a', _kForeground, windowStart.add(const Duration(minutes: 10))),
@@ -62,9 +74,11 @@ void main() {
     final sessions =
         svc.reconstructSessionsForTest(events, windowStart, windowEnd);
 
-    expect(sessions.length, 2);
-    expect(sessions[0].durationMinutes, 10);
-    expect(sessions[1].durationMinutes, 5);
+    expect(sessions.length, 1,
+        reason: 'one uninterrupted stretch of com.a in the foreground');
+    expect(sessions.single.start, windowStart);
+    expect(sessions.single.end, windowStart.add(const Duration(minutes: 15)));
+    expect(sessions.single.durationMinutes, 15);
     final total = sessions.fold<int>(0, (s, e) => s + e.durationMinutes);
     expect(total, 15, reason: 'no time double-counted across the phantom gap');
   });
