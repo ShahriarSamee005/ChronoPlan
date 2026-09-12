@@ -9,12 +9,14 @@ import '../../core/analytics/analytics_service.dart';
 import '../../core/notifications/notification_service.dart';
 import '../../core/theme/app_colors.dart';
 import '../../providers/database_provider.dart';
+import '../../providers/notification_permission_provider.dart';
 import '../../providers/settings_provider.dart';
 import '../log_entry/log_entry_sheet.dart';
 import '../shell/app_shell.dart';
 import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
+import 'widgets/notification_permission_card.dart';
 import 'widgets/time_gradient_background.dart';
 import '../../providers/pending_reconciliation_provider.dart';
 import '../../providers/usage_stats_provider.dart';
@@ -62,6 +64,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
     ref.invalidate(usagePermissionProvider);
     ref.invalidate(todayUsageProvider);
     ref.invalidate(hourlyUsageForTodayProvider);
+    // Same contract for POST_NOTIFICATIONS, so returning from the system
+    // dialog or the notification settings page hides the card immediately.
+    ref.invalidate(notificationPermissionProvider);
 
     final notifService = ref.read(notificationServiceProvider);
     await notifService.cancelInactivityCheck();
@@ -100,6 +105,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
         } else if (payload == kNotifPayloadWeeklyReflection ||
             payload == kNotifPayloadMorningIntention) {
           context.push('/debrief');
+        } else if (payload == kNotifPayloadWakeUp) {
+          // Opens the log sheet, which is where the live sleep toggle is
+          // (SleepModeCard is never instantiated) - so the tap lands on the
+          // switch this nudge is asking the user to flip. Deliberately not
+          // kNotifPayloadConfirmSleep, which nothing handles at all.
+          _openLogSheet();
         }
       });
     });
@@ -143,6 +154,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             padding: EdgeInsets.fromLTRB(
                 16, 12, 16, NavBarMetrics.clearance(context)),
             children: [
+              const NotificationPermissionCard(),
               const CurrentHourCard(),
               const SizedBox(height: 12),
               const DailyIntentionCard(),

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 
 import '../../core/usage_stats/usage_stats_service.dart';
+import 'notification_debug_screen.dart';
 
 /// ─────────────────────────────────────────────────────────────────────────
 /// TEMPORARY DEBUG SCREEN — diagnostic tool for the Usage Stats pipeline.
@@ -52,6 +53,14 @@ class _UsageDebugScreenState extends State<UsageDebugScreen> {
         backgroundColor: const Color(0xFF1A1A2A),
         title: const Text('Usage Stats Debug'),
         actions: [
+          // TEMPORARY: reminder-alarm diagnostic, see notification_debug_screen.dart
+          IconButton(
+            icon: const Icon(Icons.notifications_active_outlined),
+            tooltip: 'Reminder alarms (temporary)',
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => const NotificationDebugScreen(),
+            )),
+          ),
           IconButton(
             icon: const Icon(Icons.refresh_rounded),
             onPressed: _load,

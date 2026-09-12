@@ -467,6 +467,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
             endTime: Value(_endTime),
           ),
         );
+        
       } else {
         // avoidUsageDerived: the log fills only the empty space, slotting
         // around any confirmed screen time rather than stacking on it.

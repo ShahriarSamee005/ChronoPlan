@@ -5,6 +5,7 @@ import android.app.usage.UsageEvents
 import android.app.usage.UsageStatsManager
 import android.content.Intent
 import android.content.pm.ApplicationInfo
+import android.net.Uri
 import android.os.Build
 import android.os.Process
 import android.provider.Settings
@@ -16,6 +17,8 @@ class MainActivity : FlutterActivity() {
 
     private val permissionChannel = "com.example.chronoplan/usage_permission"
     private val usageStatsChannel  = "com.example.chronoplan/usage_stats"
+    private val notificationPermissionChannel =
+        "com.example.chronoplan/notification_permission"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -52,6 +55,41 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, notificationPermissionChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "openNotificationSettings" -> {
+                        openNotificationSettings()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
+    }
+
+    /**
+     * Opens the app's own notification settings page.
+     *
+     * This is the escape hatch for the POST_NOTIFICATIONS ask limit: Android
+     * stops showing the runtime dialog after the user denies it twice, and
+     * from then on requestNotificationsPermission() returns false without
+     * showing anything.  The settings page is the only remaining way in.
+     *
+     * ACTION_APP_NOTIFICATION_SETTINGS is API 26+.  minSdk here is 24, where
+     * notifications are on by default and POST_NOTIFICATIONS does not exist
+     * as a runtime permission — but the user can still have switched them off,
+     * so the app details page is used as the closest equivalent.
+     */
+    private fun openNotificationSettings() {
+        val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                .putExtra(Settings.EXTRA_APP_PACKAGE, packageName)
+        } else {
+            Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                .setData(Uri.fromParts("package", packageName, null))
+        }
+        startActivity(intent)
     }
 
     /**

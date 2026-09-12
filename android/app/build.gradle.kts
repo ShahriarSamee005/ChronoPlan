@@ -26,6 +26,13 @@ android {
     buildTypes {
         release {
             signingConfig = signingConfigs.getByName("debug")
+            // Minification is enabled by the Flutter Gradle plugin for release
+            // builds; these rules keep Gson's generic signatures so
+            // flutter_local_notifications can deserialise scheduled alarms.
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
         }
     }
 }
