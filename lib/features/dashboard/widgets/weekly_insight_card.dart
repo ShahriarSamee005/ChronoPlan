@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import '../../../core/ai/ai_markdown.dart';
 import '../../../core/database/app_database.dart';
+import '../../../core/theme/ai_markdown_text.dart';
 import '../../../core/theme/app_colors.dart';
 import '../../../core/theme/glass_card.dart';
 import '../../../providers/database_provider.dart';
@@ -142,9 +144,9 @@ class _WeeklyInsightCardState extends ConsumerState<WeeklyInsightCard> {
               ),
             )
           else if (_insight != null)
-            Text(
-              _insight!,
-              style: const TextStyle(
+            AiMarkdownText(
+              blocks: parseAiMarkdown(_insight!),
+              baseStyle: const TextStyle(
                 color: Colors.white70,
                 fontSize: 13,
                 height: 1.6,

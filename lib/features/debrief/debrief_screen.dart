@@ -5,7 +5,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/ai/ai_markdown.dart';
 import '../../core/database/app_database.dart';
+import '../../core/theme/ai_markdown_text.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/glass_card.dart';
 import '../../providers/categories_provider.dart';
@@ -17,6 +19,13 @@ import '../../providers/routine_provider.dart';
 import '../../core/ai/groq_service.dart';
 import '../../providers/settings_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
+
+/// Assistant bubbles never grow wider than this fraction of the screen.
+const kDebriefBubbleMaxWidthFraction = 0.88;
+
+/// While streaming, the visible text refreshes at most once per this window.
+/// Every token is still buffered immediately; only the rebuild is throttled.
+const kStreamThrottle = Duration(milliseconds: 50);
 
 /// Builds the AI debrief context prompt. Extracted as a top-level function
 /// so it's directly unit-testable without spinning up the full screen.
@@ -98,9 +107,24 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
   bool _isStreaming = false;
   bool _contextLoaded = false;
   StreamSubscription<String>? _streamSub;
+  Timer? _throttleTimer;
+
+  // Memo for buildDebriefContextPrompt: reused while every input is the same
+  // object (Drift's .watch() only emits a new list when the data changes), so
+  // streaming rebuilds don't re-sort entries and rebuild the string each time.
+  bool _hasContextCache = false;
+  List<LogEntry>? _ctxEntries;
+  List<Category>? _ctxCats;
+  List<RoutineSlot>? _ctxRoutine;
+  DailyIntention? _ctxIntention;
+  List<IntentionTask>? _ctxTasks;
+  int? _ctxDone;
+  int? _ctxTotal;
+  String? _ctxPrompt;
 
   @override
   void dispose() {
+    _throttleTimer?.cancel();
     _streamSub?.cancel();
     _controller.dispose();
     _scrollCtrl.dispose();
@@ -148,39 +172,43 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
   ) {
     final buf = StringBuffer();
 
+    _throttleTimer?.cancel();
+    _throttleTimer = null;
     _streamSub?.cancel();
     _streamSub = service.debriefStreamSSE(messages, contextPrompt).listen(
       (token) {
         if (!mounted) return;
-        buf.write(token);
-        setState(() => _streamingText = buf.toString());
-        _scrollToBottom();
-      },
-      onDone: () {
-        if (!mounted) return;
-        setState(() {
-          _messages.add({
-            'role': 'assistant',
-            'content': buf.isEmpty ? '…' : buf.toString(),
-          });
-          _streamingText = '';
-          _isStreaming = false;
-        });
-        _scrollToBottom();
-      },
-      onError: (_) {
-        if (!mounted) return;
-        setState(() {
-          _messages.add({
-            'role': 'assistant',
-            'content': buf.isEmpty ? '…' : buf.toString(),
-          });
-          _streamingText = '';
-          _isStreaming = false;
+        buf.write(token); // every token lands in the buffer immediately        // At most one rebuild (and one scroll) per kStreamThrottle window.
+        _throttleTimer ??= Timer(kStreamThrottle, () {
+          _throttleTimer = null;
+          if (!mounted) return;
+          setState(() => _streamingText = buf.toString());
+          _scrollToBottom();
         });
       },
+      onDone: () => _finishStream(buf),
+      onError: (_) => _finishStream(buf),
       cancelOnError: true,
     );
+  }
+
+  /// Final flush on done or error: drops any pending throttle tick and commits
+  /// the FULL buffer — never the last throttled snapshot — so tokens that
+  /// arrived inside the final window are never lost.
+  void _finishStream(StringBuffer buf) {
+    _throttleTimer?.cancel();
+    _throttleTimer = null;
+    if (!mounted) return;
+    final text = buf.toString();
+    setState(() {
+      _messages.add({
+        'role': 'assistant',
+        'content': text.isEmpty ? '…' : text,
+      });
+      _streamingText = '';
+      _isStreaming = false;
+    });
+    _scrollToBottom();
   }
 
   void _scrollToBottom() {
@@ -221,15 +249,38 @@ class _DebriefScreenState extends ConsumerState<DebriefScreen> {
         tasksAsync.hasValue &&
         taskCountsAsync.hasValue) {
       final (doneCount, totalCount) = taskCountsAsync.value!;
-      contextPrompt = buildDebriefContextPrompt(
-        entries: entriesAsync.value!,
-        cats: catsAsync.value!,
-        routine: routineAsync.value!,
-        intention: intentionAsync.value,
-        tasks: tasksAsync.value!,
-        doneTaskCount: doneCount,
-        totalTaskCount: totalCount,
-      );
+      final entries = entriesAsync.value!;
+      final cats = catsAsync.value!;
+      final routine = routineAsync.value!;
+      final intention = intentionAsync.value;
+      final tasks = tasksAsync.value!;
+      if (!_hasContextCache ||
+          !identical(entries, _ctxEntries) ||
+          !identical(cats, _ctxCats) ||
+          !identical(routine, _ctxRoutine) ||
+          !identical(intention, _ctxIntention) ||
+          !identical(tasks, _ctxTasks) ||
+          doneCount != _ctxDone ||
+          totalCount != _ctxTotal) {
+        _ctxPrompt = buildDebriefContextPrompt(
+          entries: entries,
+          cats: cats,
+          routine: routine,
+          intention: intention,
+          tasks: tasks,
+          doneTaskCount: doneCount,
+          totalTaskCount: totalCount,
+        );
+        _hasContextCache = true;
+        _ctxEntries = entries;
+        _ctxCats = cats;
+        _ctxRoutine = routine;
+        _ctxIntention = intention;
+        _ctxTasks = tasks;
+        _ctxDone = doneCount;
+        _ctxTotal = totalCount;
+      }
+      contextPrompt = _ctxPrompt;
       if (!_contextLoaded) {
         WidgetsBinding.instance.addPostFrameCallback((_) {
           if (mounted) _kickOff(contextPrompt!);
@@ -409,6 +460,12 @@ class _VerdictButton extends StatelessWidget {
 // ── Chat message bubble ──────────────────────────────────────────────────────
 
 class _MessageBubble extends StatelessWidget {
+  static const _bubbleTextStyle = TextStyle(
+    color: Colors.white,
+    fontSize: 13.5,
+    height: 1.5,
+  );
+
   final String role;
   final String text;
   final Color accent;
@@ -424,6 +481,24 @@ class _MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isUser = role == 'user';
+    final card = GlassCard(
+      borderRadius: 14,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      fillColor: isUser
+          ? accent.withValues(alpha: 0.18)
+          : Colors.white.withValues(alpha: 0.06),
+      borderColor: isUser
+          ? accent.withValues(alpha: 0.40)
+          : Colors.white.withValues(alpha: 0.12),
+      // User text is typed plain text and is never parsed as markdown.
+      child: isUser
+          ? Text(text, style: _bubbleTextStyle)
+          : AiMarkdownText(
+              blocks: parseAiMarkdown(text),
+              baseStyle: _bubbleTextStyle,
+              trailing: isStreaming ? const _BlinkingCursor() : null,
+            ),
+    );
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -437,44 +512,19 @@ class _MessageBubble extends StatelessWidget {
               child:
                   Icon(Icons.auto_awesome_rounded, color: accent, size: 16),
             ),
-          Flexible(
-            child: GlassCard(
-              borderRadius: 14,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              fillColor: isUser
-                  ? accent.withValues(alpha: 0.18)
-                  : Colors.white.withValues(alpha: 0.06),
-              borderColor: isUser
-                  ? accent.withValues(alpha: 0.40)
-                  : Colors.white.withValues(alpha: 0.12),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Flexible(
-                    child: Text(
-                      text,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 13.5,
-                        height: 1.5,
-                      ),
-                    ),
-                  ),
-                  if (isStreaming)
-                    const Padding(
-                      padding: EdgeInsets.only(left: 4),
-                      child: _BlinkingCursor(),
-                    ),
-                ],
-              ),
-            ),
-          ),
+          Flexible(child: isUser ? card : _capWidth(context, card)),
         ],
       ),
     );
   }
+
+  Widget _capWidth(BuildContext context, Widget child) => ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth:
+              MediaQuery.sizeOf(context).width * kDebriefBubbleMaxWidthFraction,
+        ),
+        child: child,
+      );
 }
 
 // ── Blinking cursor for streaming ────────────────────────────────────────────
