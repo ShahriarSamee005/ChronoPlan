@@ -17,6 +17,7 @@ import 'widgets/current_hour_card.dart';
 import 'widgets/daily_intention_card.dart';
 import 'widgets/daily_pie_chart_card.dart';
 import 'widgets/notification_permission_card.dart';
+import 'widgets/sleep_active_card.dart';
 import 'widgets/time_gradient_background.dart';
 import '../../providers/pending_reconciliation_provider.dart';
 import '../../providers/usage_stats_provider.dart';
@@ -154,6 +155,9 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
             padding: EdgeInsets.fromLTRB(
                 16, 12, 16, NavBarMetrics.clearance(context)),
             children: [
+              // Both this and NotificationPermissionCard carry their own 12px
+              // bottom gap, so neither takes a paired SizedBox here.
+              SleepActiveCard(onTap: _openLogSheet),
               const NotificationPermissionCard(),
               const CurrentHourCard(),
               const SizedBox(height: 12),
