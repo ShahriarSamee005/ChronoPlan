@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import '../tables/categories_table.dart';
@@ -9,6 +10,8 @@ part 'categories_dao.g.dart';
 class CategoriesDao extends DatabaseAccessor<AppDatabase>
     with _$CategoriesDaoMixin {
   CategoriesDao(super.db);
+
+  static const _uuid = Uuid();
 
   Stream<List<Category>> watchAll() => (select(categories)
         ..where((c) => c.isArchived.equals(false))
@@ -29,7 +32,9 @@ class CategoriesDao extends DatabaseAccessor<AppDatabase>
           .getSingleOrNull();
 
   Future<int> insertCategory(CategoriesCompanion entry) =>
-      into(categories).insert(entry);
+      into(categories).insert(entry.syncId.present
+          ? entry
+          : entry.copyWith(syncId: Value(_uuid.v4())));
 
   Future<void> updateCategory(CategoriesCompanion entry) =>
       (update(categories)..where((c) => c.id.equals(entry.id.value)))
@@ -59,6 +64,7 @@ class CategoriesDao extends DatabaseAccessor<AppDatabase>
         name: name,
         colorValue: color,
         isSystem: Value(isSystem),
+        syncId: Value(_uuid.v4()),
       ));
     }
   }

@@ -160,7 +160,8 @@ class UsageStatsService {
           pkg,
           _AppInfo(
             label: m['label'] as String? ?? pkg,
-            userFacing: m['userFacing'] as bool? ?? true,
+            userFacing: (m['userFacing'] as bool? ?? true) ||
+                kScreenTimeAllowlist.contains(pkg),
           ),
         );
       });
@@ -819,15 +820,27 @@ class UsageStatsService {
       sliceByHourForTest(
     List<DebugSession> sessions,
     DateTime dayStart,
-    int maxHour,
-  ) {
+    int maxHour, {
+    Set<String>? nonUserFacing,
+  }) {
     final internal = sessions
         .map((s) => _Session(s.packageName, s.start, s.end,
             openEnded: s.openEnded, clamped: s.clamped))
         .toList();
+    // nonUserFacing == null keeps the original behaviour: every session is
+    // user-facing, so pre-existing callers are unaffected. When a set is
+    // passed, those packages are treated as system apps (userFacing false)
+    // UNLESS they are on kScreenTimeAllowlist — mirroring production's
+    // _resolveAppInfo exactly.
     final appInfo = {
       for (final s in sessions)
-        s.packageName: _AppInfo(label: s.packageName, userFacing: true),
+        s.packageName: _AppInfo(
+          label: s.packageName,
+          userFacing: nonUserFacing == null
+              ? true
+              : (!nonUserFacing.contains(s.packageName) ||
+                  kScreenTimeAllowlist.contains(s.packageName)),
+        ),
     };
     final violations = <UsageGuardViolation>[];
     final buckets = _sliceByHour(internal, dayStart, maxHour, appInfo,
@@ -934,6 +947,21 @@ class UsageGuardViolation {
       'UsageGuardViolation(hour: $hour, pkg: $pkg, raw: ${rawMinutes}m → '
       '${clampedTo}m)';
 }
+
+/// Preinstalled apps that ship as system apps but are real time-sinks, so they
+/// should count toward Screen Time even though FLAG_SYSTEM marks them
+/// non-user-facing. Purely additive: membership only ever turns userFacing
+/// false -> true; it never removes or changes any app that already counts.
+const Set<String> kScreenTimeAllowlist = {
+  'com.android.chrome',              // Chrome
+  'com.google.android.youtube',      // YouTube
+  'com.facebook.katana',            // Facebook
+  'com.facebook.lite',              // Facebook Lite
+  'com.facebook.orca',              // Messenger
+  'com.instagram.android',          // Instagram
+  'com.netflix.mediaclient',        // Netflix
+  'com.heytap.browser',             // Realme / Oppo (ColorOS) stock browser
+};
 
 /// Minimum foreground minutes for an app to be considered real usage.
 /// Enforced once in [UsageStatsService._sliceByHour] so the 2a suggestion

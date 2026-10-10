@@ -71,6 +71,11 @@ void main() {
             packageName: 'com.google.android.youtube',
             appLabel: 'YouTube',
             durationMinutes: 22),
+        // The 35-min total below includes Chrome's 13 min BECAUSE
+        // com.android.chrome is on kScreenTimeAllowlist, so it now counts on a
+        // real device. This test stubs hourlyUsageForTodayProvider directly, so
+        // it exercises suggestion MATH, not the userFacing filter itself — the
+        // filter is covered for real in test/screen_time_allowlist_test.dart.
         AppUsageEntry(
             packageName: 'com.android.chrome',
             appLabel: 'Chrome',

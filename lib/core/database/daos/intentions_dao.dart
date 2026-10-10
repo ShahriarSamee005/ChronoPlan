@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import '../tables/daily_intentions_table.dart';
@@ -9,6 +10,8 @@ part 'intentions_dao.g.dart';
 class IntentionsDao extends DatabaseAccessor<AppDatabase>
     with _$IntentionsDaoMixin {
   IntentionsDao(super.db);
+
+  static const _uuid = Uuid();
 
   Stream<DailyIntention?> watchForDate(DateTime date) {
     final day = _dayKey(date);
@@ -29,6 +32,7 @@ class IntentionsDao extends DatabaseAccessor<AppDatabase>
       await into(dailyIntentions).insert(DailyIntentionsCompanion.insert(
         intention: text,
         date: day,
+        syncId: Value(_uuid.v4()),
       ));
     } else {
       await (update(dailyIntentions)
@@ -55,6 +59,7 @@ class IntentionsDao extends DatabaseAccessor<AppDatabase>
         intention: '',
         date: day,
         verdictPositive: Value(positive),
+        syncId: Value(_uuid.v4()),
       ));
     }
   }

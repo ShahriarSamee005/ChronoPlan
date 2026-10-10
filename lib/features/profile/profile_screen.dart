@@ -3,12 +3,42 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../../core/backup/backup_service.dart';
 import '../../core/database/app_database.dart';
 import '../../core/theme/app_colors.dart';
 import '../../core/theme/glass_card.dart';
 import '../../providers/categories_provider.dart';
 import '../../providers/database_provider.dart';
 import '../dashboard/widgets/time_gradient_background.dart';
+
+/// Exports all data to a JSON file and opens the share sheet. Shows a blocking
+/// spinner during the (fast) file write, dismisses it before the share sheet
+/// appears, and surfaces any failure as a snackbar — never a crash.
+Future<void> _exportData(BuildContext context, WidgetRef ref) async {
+  final messenger = ScaffoldMessenger.of(context);
+  final navigator = Navigator.of(context, rootNavigator: true);
+
+  showDialog<void>(
+    context: context,
+    barrierDismissible: false,
+    builder: (_) => const Center(child: CircularProgressIndicator()),
+  );
+
+  try {
+    final service = ref.read(backupServiceProvider);
+    final path = await service.exportToFile();
+    if (navigator.canPop()) navigator.pop(); // dismiss spinner
+    await service.shareFile(path);
+  } on BackupException catch (e) {
+    if (navigator.canPop()) navigator.pop();
+    messenger.showSnackBar(SnackBar(content: Text(e.message)));
+  } catch (_) {
+    if (navigator.canPop()) navigator.pop();
+    messenger.showSnackBar(
+      const SnackBar(content: Text("Couldn't export your data.")),
+    );
+  }
+}
 
 // ── Profile stats provider ────────────────────────────────────────────────────
 
@@ -126,6 +156,11 @@ class ProfileScreen extends ConsumerWidget {
                 icon: Icons.help_outline_rounded,
                 label: 'How ChronoPlan works',
                 onTap: () => context.push('/onboarding'),
+              ),
+              _LinkTile(
+                icon: Icons.download_outlined,
+                label: 'Export my data',
+                onTap: () => _exportData(context, ref),
               ),
               _LinkTile(
                 icon: Icons.cloud_outlined,

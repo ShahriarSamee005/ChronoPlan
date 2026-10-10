@@ -12,6 +12,10 @@
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
     <uses-permission android:name="android.permission.VIBRATE"/>
 
+    <!-- Battery optimization — one-time exemption prompt shown on first
+         sleep-mode enable so the wake nudge survives Doze -->
+    <uses-permission android:name="android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS"/>
+
     <!-- Usage Stats — requested contextually after day 2+, never on first launch -->
     <uses-permission
         android:name="android.permission.PACKAGE_USAGE_STATS"

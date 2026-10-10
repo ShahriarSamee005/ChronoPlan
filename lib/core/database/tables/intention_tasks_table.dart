@@ -10,4 +10,5 @@ class IntentionTasks extends Table {
   IntColumn get sortOrder => integer()();
   // Stored as midnight local time for the day (date-only semantics)
   DateTimeColumn get date => dateTime()();
+  TextColumn get syncId => text().nullable()(); // UUID for Supabase sync
 }

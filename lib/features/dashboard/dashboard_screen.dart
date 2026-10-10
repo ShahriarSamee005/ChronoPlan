@@ -86,6 +86,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen>
       }
       // B10: always (re-)schedule Sunday reflection after cancelAll()
       await notifService.scheduleWeeklyReflection();
+    } else if (settings.sleepModeStartedAt != null) {
+      // Sleep is still on. Re-arm the wake nudge from the STORED start time so a
+      // 997 the OS dropped during sleep gets restored. scheduleWakeNotification
+      // cancels its own id first and derives the fire time purely from
+      // sleepStartedAt (via wakeFireTime) — so re-arming a still-pending alarm is
+      // a no-op at the same time, never a forward drift. Uses the stored start,
+      // never DateTime.now(). Reminders stay cancelled here (sleep-on already
+      // cancelled them); only the wake notification is touched. Bare await
+      // matches the sleep-off branch's notification calls above.
+      await notifService.scheduleWakeNotification(
+        sleepStartedAt: settings.sleepModeStartedAt!,
+      );
     }
   }
 

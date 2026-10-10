@@ -76,6 +76,21 @@ class SettingsNotifier extends AsyncNotifier<void> {
     if (active) {
       await _notifications.cancelReminders();
       await _notifications.scheduleWakeNotification(sleepStartedAt: startedAt!);
+
+      // First time sleep mode is turned on, ask the user once to exempt the app
+      // from battery optimization (Doze) so the wake nudge can fire. Asked ONCE
+      // and never again — regardless of whether they were already exempt or
+      // what they choose in the system dialog.
+      final settings = await _db.getSettings();
+      if (!settings.batteryExemptionAsked) {
+        final exempt = await _notifications.isIgnoringBatteryOptimizations();
+        if (!exempt) {
+          await _notifications.requestIgnoreBatteryOptimizations();
+        }
+        // mark asked regardless of exempt state or the user's choice — ask ONCE
+        await _db.updateSettings(
+            UserSettingsCompanion(batteryExemptionAsked: const Value(true)));
+      }
     } else {
       // Waking early must take the nudge with it, or a user up at 6am still
       // gets "wakey wakey" at 9 — and the next app-pause would arm the

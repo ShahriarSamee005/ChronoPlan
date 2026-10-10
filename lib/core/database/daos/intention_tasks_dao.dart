@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import '../tables/intention_tasks_table.dart';
@@ -13,6 +14,8 @@ const kMaxTasksPerDay = 10;
 class IntentionTasksDao extends DatabaseAccessor<AppDatabase>
     with _$IntentionTasksDaoMixin {
   IntentionTasksDao(super.db);
+
+  static const _uuid = Uuid();
 
   /// Not-done tasks for the day, in insertion (sortOrder) order.
   Stream<List<IntentionTask>> watchForDay(DateTime date) {
@@ -33,6 +36,7 @@ class IntentionTasksDao extends DatabaseAccessor<AppDatabase>
       label: text,
       date: day,
       sortOrder: maxSort + 1,
+      syncId: Value(_uuid.v4()),
     ));
     return AddTaskResult.added;
   }

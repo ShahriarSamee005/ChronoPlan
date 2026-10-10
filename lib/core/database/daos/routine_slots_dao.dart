@@ -1,4 +1,5 @@
 import 'package:drift/drift.dart';
+import 'package:uuid/uuid.dart';
 
 import '../app_database.dart';
 import '../tables/routine_slots_table.dart';
@@ -9,6 +10,8 @@ part 'routine_slots_dao.g.dart';
 class RoutineSlotsDao extends DatabaseAccessor<AppDatabase>
     with _$RoutineSlotsDaoMixin {
   RoutineSlotsDao(super.db);
+
+  static const _uuid = Uuid();
 
   /// Watch slots for a specific day-of-week (1=Mon … 7=Sun).
   /// Slots with dayOfWeek == 0 apply every day and are always included.
@@ -37,7 +40,9 @@ class RoutineSlotsDao extends DatabaseAccessor<AppDatabase>
   }
 
   Future<int> insertSlot(RoutineSlotsCompanion entry) =>
-      into(routineSlots).insert(entry);
+      into(routineSlots).insert(entry.syncId.present
+          ? entry
+          : entry.copyWith(syncId: Value(_uuid.v4())));
 
   Future<void> updateSlot(RoutineSlotsCompanion entry) =>
       (update(routineSlots)..where((s) => s.id.equals(entry.id.value)))
@@ -76,6 +81,7 @@ class RoutineSlotsDao extends DatabaseAccessor<AppDatabase>
           startHour: slot.startHour,
           durationHours: Value(slot.durationHours),
           isActive: const Value(true),
+          syncId: Value(_uuid.v4()),
         ));
       }
     }

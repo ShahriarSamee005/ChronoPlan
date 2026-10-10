@@ -4,6 +4,7 @@ import 'package:drift/drift.dart';
 import 'package:drift/native.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:uuid/uuid.dart';
 
 import 'tables/categories_table.dart';
 import 'tables/daily_intentions_table.dart';
@@ -20,6 +21,7 @@ import 'daos/intention_tasks_dao.dart';
 import 'daos/intentions_dao.dart';
 import 'daos/log_entries_dao.dart';
 import 'daos/routine_slots_dao.dart';
+import '../backup/backup_serializer.dart';
 
 part 'app_database.g.dart';
 
@@ -48,7 +50,7 @@ class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? executor]) : super(executor ?? _openConnection());
 
   @override
-  int get schemaVersion => 7;
+  int get schemaVersion => 9;
 
   @override
   MigrationStrategy get migration => MigrationStrategy(
@@ -98,8 +100,69 @@ class AppDatabase extends _$AppDatabase {
             // OS-derived screen-time rows apart from user log entries.
             await m.addColumn(logEntries, logEntries.isUsageDerived);
           }
+          if (from < 8) {
+            // Add battery_exemption_asked so the one-time Doze-exemption prompt
+            // on first sleep-mode enable is shown exactly once. Pure additive
+            // column with a default — no existing data touched.
+            await m.addColumn(userSettings, userSettings.batteryExemptionAsked);
+          }
+          if (from < 9) {
+            // Give categories, routine_slots, daily_intentions and
+            // intention_tasks a stable UUID syncId for Supabase sync. The first
+            // three already have a (never-populated) nullable column; only
+            // intention_tasks needs the column added. Then backfill a fresh,
+            // unique UUID into every existing row that has a NULL syncId.
+            //
+            // ATOMICITY: on native sqlite3 drift uses a NoTransactionDelegate
+            // and does NOT wrap onUpgrade in a transaction, so this step wraps
+            // itself in one explicit transaction. A failure mid-backfill rolls
+            // back BOTH the column add and every UPDATE, leaving a clean v8
+            // state; schemaVersion is only persisted after onUpgrade returns
+            // normally, so the step retries cleanly from v8 on the next open.
+            await transaction(() async {
+              await m.addColumn(intentionTasks, intentionTasks.syncId);
+              await _backfillSyncIdsForV9();
+            });
+          }
         },
       );
+
+  /// Backfills a unique UUID into every NULL `syncId` across the four in-scope
+  /// tables. One fresh uuid per row; existing non-null syncIds (e.g.
+  /// log_entries, or any already set) are never touched. Touches only the
+  /// syncId column — no row added, removed, or otherwise modified. Empty tables
+  /// are a no-op. Must run inside the v8->v9 migration transaction.
+  Future<void> _backfillSyncIdsForV9() async {
+    const uuid = Uuid();
+
+    final catRows =
+        await (select(categories)..where((c) => c.syncId.isNull())).get();
+    for (final r in catRows) {
+      await (update(categories)..where((c) => c.id.equals(r.id)))
+          .write(CategoriesCompanion(syncId: Value(uuid.v4())));
+    }
+
+    final slotRows =
+        await (select(routineSlots)..where((s) => s.syncId.isNull())).get();
+    for (final r in slotRows) {
+      await (update(routineSlots)..where((s) => s.id.equals(r.id)))
+          .write(RoutineSlotsCompanion(syncId: Value(uuid.v4())));
+    }
+
+    final intentionRows =
+        await (select(dailyIntentions)..where((i) => i.syncId.isNull())).get();
+    for (final r in intentionRows) {
+      await (update(dailyIntentions)..where((i) => i.id.equals(r.id)))
+          .write(DailyIntentionsCompanion(syncId: Value(uuid.v4())));
+    }
+
+    final taskRows =
+        await (select(intentionTasks)..where((t) => t.syncId.isNull())).get();
+    for (final r in taskRows) {
+      await (update(intentionTasks)..where((t) => t.id.equals(r.id)))
+          .write(IntentionTasksCompanion(syncId: Value(uuid.v4())));
+    }
+  }
 
   // ── Settings helpers (single-row table) ──────────────────────────────────
 
@@ -111,6 +174,28 @@ class AppDatabase extends _$AppDatabase {
 
   Future<void> updateSettings(UserSettingsCompanion patch) =>
       (update(userSettings)..where((s) => s.id.equals(1))).write(patch);
+
+  // ── Backup read layer ─────────────────────────────────────────────────────
+
+  /// Reads EVERY row of EVERY table for a local backup export. Read-only.
+  ///
+  /// Uses unfiltered `select(table).get()` per table rather than the existing
+  /// DAO `getAll()` helpers on purpose: `CategoriesDao.getAll()` excludes
+  /// archived categories, which a complete backup must still capture (restore
+  /// would otherwise lose them). This method is the single feed for the
+  /// serializer — see [buildBackupMapFrom].
+  Future<BackupData> readAllForBackup() async {
+    return BackupData(
+      categories: await select(categories).get(),
+      logEntries: await select(logEntries).get(),
+      routineSlots: await select(routineSlots).get(),
+      dailyIntentions: await select(dailyIntentions).get(),
+      userSettings: await select(userSettings).get(),
+      dismissedSuggestions: await select(dismissedSuggestions).get(),
+      dismissedCarves: await select(dismissedCarves).get(),
+      intentionTasks: await select(intentionTasks).get(),
+    );
+  }
 }
 
 LazyDatabase _openConnection() {

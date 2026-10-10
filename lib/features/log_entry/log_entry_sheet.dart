@@ -103,6 +103,7 @@ class _LogEntrySheetState extends ConsumerState<LogEntrySheet> {
   late final DateTime _day;
 
   late DateTime _startTime;
+  
   late DateTime _endTime;
   int? _selectedCategoryId;
   bool _isSaving = false;

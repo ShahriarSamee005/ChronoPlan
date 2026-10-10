@@ -31,6 +31,11 @@ class UserSettings extends Table {
   BoolColumn get usageStatsPermissionAsked =>
       boolean().withDefault(const Constant(false))();
 
+  // Set true after the one-time battery-optimization exemption prompt shown on
+  // first sleep-mode enable (asked once, never again — regardless of outcome)
+  BoolColumn get batteryExemptionAsked =>
+      boolean().withDefault(const Constant(false))();
+
   // Date last morning intention prompt was shown (reset daily)
   DateTimeColumn get lastIntentionPromptDate => dateTime().nullable()();
 

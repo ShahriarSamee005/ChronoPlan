@@ -1997,6 +1997,16 @@ class $UserSettingsTable extends UserSettings
           defaultConstraints: GeneratedColumn.constraintIsAlways(
               'CHECK ("usage_stats_permission_asked" IN (0, 1))'),
           defaultValue: const Constant(false));
+  static const VerificationMeta _batteryExemptionAskedMeta =
+      const VerificationMeta('batteryExemptionAsked');
+  @override
+  late final GeneratedColumn<bool> batteryExemptionAsked =
+      GeneratedColumn<bool>('battery_exemption_asked', aliasedName, false,
+          type: DriftSqlType.bool,
+          requiredDuringInsert: false,
+          defaultConstraints: GeneratedColumn.constraintIsAlways(
+              'CHECK ("battery_exemption_asked" IN (0, 1))'),
+          defaultValue: const Constant(false));
   static const VerificationMeta _lastIntentionPromptDateMeta =
       const VerificationMeta('lastIntentionPromptDate');
   @override
@@ -2027,6 +2037,7 @@ class $UserSettingsTable extends UserSettings
         aiPersona,
         appOpenCount,
         usageStatsPermissionAsked,
+        batteryExemptionAsked,
         lastIntentionPromptDate,
         supabaseUserId,
         lastSyncedAt
@@ -2097,6 +2108,12 @@ class $UserSettingsTable extends UserSettings
               data['usage_stats_permission_asked']!,
               _usageStatsPermissionAskedMeta));
     }
+    if (data.containsKey('battery_exemption_asked')) {
+      context.handle(
+          _batteryExemptionAskedMeta,
+          batteryExemptionAsked.isAcceptableOrUnknown(
+              data['battery_exemption_asked']!, _batteryExemptionAskedMeta));
+    }
     if (data.containsKey('last_intention_prompt_date')) {
       context.handle(
           _lastIntentionPromptDateMeta,
@@ -2149,6 +2166,9 @@ class $UserSettingsTable extends UserSettings
       usageStatsPermissionAsked: attachedDatabase.typeMapping.read(
           DriftSqlType.bool,
           data['${effectivePrefix}usage_stats_permission_asked'])!,
+      batteryExemptionAsked: attachedDatabase.typeMapping.read(
+          DriftSqlType.bool,
+          data['${effectivePrefix}battery_exemption_asked'])!,
       lastIntentionPromptDate: attachedDatabase.typeMapping.read(
           DriftSqlType.dateTime,
           data['${effectivePrefix}last_intention_prompt_date']),
@@ -2176,6 +2196,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
   final String aiPersona;
   final int appOpenCount;
   final bool usageStatsPermissionAsked;
+  final bool batteryExemptionAsked;
   final DateTime? lastIntentionPromptDate;
   final String? supabaseUserId;
   final String? lastSyncedAt;
@@ -2190,6 +2211,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       required this.aiPersona,
       required this.appOpenCount,
       required this.usageStatsPermissionAsked,
+      required this.batteryExemptionAsked,
       this.lastIntentionPromptDate,
       this.supabaseUserId,
       this.lastSyncedAt});
@@ -2211,6 +2233,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
     map['app_open_count'] = Variable<int>(appOpenCount);
     map['usage_stats_permission_asked'] =
         Variable<bool>(usageStatsPermissionAsked);
+    map['battery_exemption_asked'] = Variable<bool>(batteryExemptionAsked);
     if (!nullToAbsent || lastIntentionPromptDate != null) {
       map['last_intention_prompt_date'] =
           Variable<DateTime>(lastIntentionPromptDate);
@@ -2240,6 +2263,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       aiPersona: Value(aiPersona),
       appOpenCount: Value(appOpenCount),
       usageStatsPermissionAsked: Value(usageStatsPermissionAsked),
+      batteryExemptionAsked: Value(batteryExemptionAsked),
       lastIntentionPromptDate: lastIntentionPromptDate == null && nullToAbsent
           ? const Value.absent()
           : Value(lastIntentionPromptDate),
@@ -2271,6 +2295,8 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       appOpenCount: serializer.fromJson<int>(json['appOpenCount']),
       usageStatsPermissionAsked:
           serializer.fromJson<bool>(json['usageStatsPermissionAsked']),
+      batteryExemptionAsked:
+          serializer.fromJson<bool>(json['batteryExemptionAsked']),
       lastIntentionPromptDate:
           serializer.fromJson<DateTime?>(json['lastIntentionPromptDate']),
       supabaseUserId: serializer.fromJson<String?>(json['supabaseUserId']),
@@ -2292,6 +2318,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       'appOpenCount': serializer.toJson<int>(appOpenCount),
       'usageStatsPermissionAsked':
           serializer.toJson<bool>(usageStatsPermissionAsked),
+      'batteryExemptionAsked': serializer.toJson<bool>(batteryExemptionAsked),
       'lastIntentionPromptDate':
           serializer.toJson<DateTime?>(lastIntentionPromptDate),
       'supabaseUserId': serializer.toJson<String?>(supabaseUserId),
@@ -2310,6 +2337,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           String? aiPersona,
           int? appOpenCount,
           bool? usageStatsPermissionAsked,
+          bool? batteryExemptionAsked,
           Value<DateTime?> lastIntentionPromptDate = const Value.absent(),
           Value<String?> supabaseUserId = const Value.absent(),
           Value<String?> lastSyncedAt = const Value.absent()}) =>
@@ -2330,6 +2358,8 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
         appOpenCount: appOpenCount ?? this.appOpenCount,
         usageStatsPermissionAsked:
             usageStatsPermissionAsked ?? this.usageStatsPermissionAsked,
+        batteryExemptionAsked:
+            batteryExemptionAsked ?? this.batteryExemptionAsked,
         lastIntentionPromptDate: lastIntentionPromptDate.present
             ? lastIntentionPromptDate.value
             : this.lastIntentionPromptDate,
@@ -2366,6 +2396,9 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       usageStatsPermissionAsked: data.usageStatsPermissionAsked.present
           ? data.usageStatsPermissionAsked.value
           : this.usageStatsPermissionAsked,
+      batteryExemptionAsked: data.batteryExemptionAsked.present
+          ? data.batteryExemptionAsked.value
+          : this.batteryExemptionAsked,
       lastIntentionPromptDate: data.lastIntentionPromptDate.present
           ? data.lastIntentionPromptDate.value
           : this.lastIntentionPromptDate,
@@ -2391,6 +2424,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           ..write('aiPersona: $aiPersona, ')
           ..write('appOpenCount: $appOpenCount, ')
           ..write('usageStatsPermissionAsked: $usageStatsPermissionAsked, ')
+          ..write('batteryExemptionAsked: $batteryExemptionAsked, ')
           ..write('lastIntentionPromptDate: $lastIntentionPromptDate, ')
           ..write('supabaseUserId: $supabaseUserId, ')
           ..write('lastSyncedAt: $lastSyncedAt')
@@ -2410,6 +2444,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
       aiPersona,
       appOpenCount,
       usageStatsPermissionAsked,
+      batteryExemptionAsked,
       lastIntentionPromptDate,
       supabaseUserId,
       lastSyncedAt);
@@ -2427,6 +2462,7 @@ class UserSetting extends DataClass implements Insertable<UserSetting> {
           other.aiPersona == this.aiPersona &&
           other.appOpenCount == this.appOpenCount &&
           other.usageStatsPermissionAsked == this.usageStatsPermissionAsked &&
+          other.batteryExemptionAsked == this.batteryExemptionAsked &&
           other.lastIntentionPromptDate == this.lastIntentionPromptDate &&
           other.supabaseUserId == this.supabaseUserId &&
           other.lastSyncedAt == this.lastSyncedAt);
@@ -2443,6 +2479,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
   final Value<String> aiPersona;
   final Value<int> appOpenCount;
   final Value<bool> usageStatsPermissionAsked;
+  final Value<bool> batteryExemptionAsked;
   final Value<DateTime?> lastIntentionPromptDate;
   final Value<String?> supabaseUserId;
   final Value<String?> lastSyncedAt;
@@ -2457,6 +2494,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
     this.aiPersona = const Value.absent(),
     this.appOpenCount = const Value.absent(),
     this.usageStatsPermissionAsked = const Value.absent(),
+    this.batteryExemptionAsked = const Value.absent(),
     this.lastIntentionPromptDate = const Value.absent(),
     this.supabaseUserId = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
@@ -2472,6 +2510,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
     this.aiPersona = const Value.absent(),
     this.appOpenCount = const Value.absent(),
     this.usageStatsPermissionAsked = const Value.absent(),
+    this.batteryExemptionAsked = const Value.absent(),
     this.lastIntentionPromptDate = const Value.absent(),
     this.supabaseUserId = const Value.absent(),
     this.lastSyncedAt = const Value.absent(),
@@ -2487,6 +2526,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
     Expression<String>? aiPersona,
     Expression<int>? appOpenCount,
     Expression<bool>? usageStatsPermissionAsked,
+    Expression<bool>? batteryExemptionAsked,
     Expression<DateTime>? lastIntentionPromptDate,
     Expression<String>? supabaseUserId,
     Expression<String>? lastSyncedAt,
@@ -2507,6 +2547,8 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       if (appOpenCount != null) 'app_open_count': appOpenCount,
       if (usageStatsPermissionAsked != null)
         'usage_stats_permission_asked': usageStatsPermissionAsked,
+      if (batteryExemptionAsked != null)
+        'battery_exemption_asked': batteryExemptionAsked,
       if (lastIntentionPromptDate != null)
         'last_intention_prompt_date': lastIntentionPromptDate,
       if (supabaseUserId != null) 'supabase_user_id': supabaseUserId,
@@ -2525,6 +2567,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       Value<String>? aiPersona,
       Value<int>? appOpenCount,
       Value<bool>? usageStatsPermissionAsked,
+      Value<bool>? batteryExemptionAsked,
       Value<DateTime?>? lastIntentionPromptDate,
       Value<String?>? supabaseUserId,
       Value<String?>? lastSyncedAt}) {
@@ -2541,6 +2584,8 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       appOpenCount: appOpenCount ?? this.appOpenCount,
       usageStatsPermissionAsked:
           usageStatsPermissionAsked ?? this.usageStatsPermissionAsked,
+      batteryExemptionAsked:
+          batteryExemptionAsked ?? this.batteryExemptionAsked,
       lastIntentionPromptDate:
           lastIntentionPromptDate ?? this.lastIntentionPromptDate,
       supabaseUserId: supabaseUserId ?? this.supabaseUserId,
@@ -2586,6 +2631,10 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
       map['usage_stats_permission_asked'] =
           Variable<bool>(usageStatsPermissionAsked.value);
     }
+    if (batteryExemptionAsked.present) {
+      map['battery_exemption_asked'] =
+          Variable<bool>(batteryExemptionAsked.value);
+    }
     if (lastIntentionPromptDate.present) {
       map['last_intention_prompt_date'] =
           Variable<DateTime>(lastIntentionPromptDate.value);
@@ -2612,6 +2661,7 @@ class UserSettingsCompanion extends UpdateCompanion<UserSetting> {
           ..write('aiPersona: $aiPersona, ')
           ..write('appOpenCount: $appOpenCount, ')
           ..write('usageStatsPermissionAsked: $usageStatsPermissionAsked, ')
+          ..write('batteryExemptionAsked: $batteryExemptionAsked, ')
           ..write('lastIntentionPromptDate: $lastIntentionPromptDate, ')
           ..write('supabaseUserId: $supabaseUserId, ')
           ..write('lastSyncedAt: $lastSyncedAt')
@@ -3181,9 +3231,14 @@ class $IntentionTasksTable extends IntentionTasks
   late final GeneratedColumn<DateTime> date = GeneratedColumn<DateTime>(
       'date', aliasedName, false,
       type: DriftSqlType.dateTime, requiredDuringInsert: true);
+  static const VerificationMeta _syncIdMeta = const VerificationMeta('syncId');
+  @override
+  late final GeneratedColumn<String> syncId = GeneratedColumn<String>(
+      'sync_id', aliasedName, true,
+      type: DriftSqlType.string, requiredDuringInsert: false);
   @override
   List<GeneratedColumn> get $columns =>
-      [id, label, isDone, doneAt, isFlagged, sortOrder, date];
+      [id, label, isDone, doneAt, isFlagged, sortOrder, date, syncId];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -3227,6 +3282,10 @@ class $IntentionTasksTable extends IntentionTasks
     } else if (isInserting) {
       context.missing(_dateMeta);
     }
+    if (data.containsKey('sync_id')) {
+      context.handle(_syncIdMeta,
+          syncId.isAcceptableOrUnknown(data['sync_id']!, _syncIdMeta));
+    }
     return context;
   }
 
@@ -3250,6 +3309,8 @@ class $IntentionTasksTable extends IntentionTasks
           .read(DriftSqlType.int, data['${effectivePrefix}sort_order'])!,
       date: attachedDatabase.typeMapping
           .read(DriftSqlType.dateTime, data['${effectivePrefix}date'])!,
+      syncId: attachedDatabase.typeMapping
+          .read(DriftSqlType.string, data['${effectivePrefix}sync_id']),
     );
   }
 
@@ -3267,6 +3328,7 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
   final bool isFlagged;
   final int sortOrder;
   final DateTime date;
+  final String? syncId;
   const IntentionTask(
       {required this.id,
       required this.label,
@@ -3274,7 +3336,8 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
       this.doneAt,
       required this.isFlagged,
       required this.sortOrder,
-      required this.date});
+      required this.date,
+      this.syncId});
   @override
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
@@ -3287,6 +3350,9 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
     map['is_flagged'] = Variable<bool>(isFlagged);
     map['sort_order'] = Variable<int>(sortOrder);
     map['date'] = Variable<DateTime>(date);
+    if (!nullToAbsent || syncId != null) {
+      map['sync_id'] = Variable<String>(syncId);
+    }
     return map;
   }
 
@@ -3300,6 +3366,8 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
       isFlagged: Value(isFlagged),
       sortOrder: Value(sortOrder),
       date: Value(date),
+      syncId:
+          syncId == null && nullToAbsent ? const Value.absent() : Value(syncId),
     );
   }
 
@@ -3314,6 +3382,7 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
       isFlagged: serializer.fromJson<bool>(json['isFlagged']),
       sortOrder: serializer.fromJson<int>(json['sortOrder']),
       date: serializer.fromJson<DateTime>(json['date']),
+      syncId: serializer.fromJson<String?>(json['syncId']),
     );
   }
   @override
@@ -3327,6 +3396,7 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
       'isFlagged': serializer.toJson<bool>(isFlagged),
       'sortOrder': serializer.toJson<int>(sortOrder),
       'date': serializer.toJson<DateTime>(date),
+      'syncId': serializer.toJson<String?>(syncId),
     };
   }
 
@@ -3337,7 +3407,8 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
           Value<DateTime?> doneAt = const Value.absent(),
           bool? isFlagged,
           int? sortOrder,
-          DateTime? date}) =>
+          DateTime? date,
+          Value<String?> syncId = const Value.absent()}) =>
       IntentionTask(
         id: id ?? this.id,
         label: label ?? this.label,
@@ -3346,6 +3417,7 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
         isFlagged: isFlagged ?? this.isFlagged,
         sortOrder: sortOrder ?? this.sortOrder,
         date: date ?? this.date,
+        syncId: syncId.present ? syncId.value : this.syncId,
       );
   IntentionTask copyWithCompanion(IntentionTasksCompanion data) {
     return IntentionTask(
@@ -3356,6 +3428,7 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
       isFlagged: data.isFlagged.present ? data.isFlagged.value : this.isFlagged,
       sortOrder: data.sortOrder.present ? data.sortOrder.value : this.sortOrder,
       date: data.date.present ? data.date.value : this.date,
+      syncId: data.syncId.present ? data.syncId.value : this.syncId,
     );
   }
 
@@ -3368,14 +3441,15 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
           ..write('doneAt: $doneAt, ')
           ..write('isFlagged: $isFlagged, ')
           ..write('sortOrder: $sortOrder, ')
-          ..write('date: $date')
+          ..write('date: $date, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
 
   @override
-  int get hashCode =>
-      Object.hash(id, label, isDone, doneAt, isFlagged, sortOrder, date);
+  int get hashCode => Object.hash(
+      id, label, isDone, doneAt, isFlagged, sortOrder, date, syncId);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -3386,7 +3460,8 @@ class IntentionTask extends DataClass implements Insertable<IntentionTask> {
           other.doneAt == this.doneAt &&
           other.isFlagged == this.isFlagged &&
           other.sortOrder == this.sortOrder &&
-          other.date == this.date);
+          other.date == this.date &&
+          other.syncId == this.syncId);
 }
 
 class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
@@ -3397,6 +3472,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
   final Value<bool> isFlagged;
   final Value<int> sortOrder;
   final Value<DateTime> date;
+  final Value<String?> syncId;
   const IntentionTasksCompanion({
     this.id = const Value.absent(),
     this.label = const Value.absent(),
@@ -3405,6 +3481,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
     this.isFlagged = const Value.absent(),
     this.sortOrder = const Value.absent(),
     this.date = const Value.absent(),
+    this.syncId = const Value.absent(),
   });
   IntentionTasksCompanion.insert({
     this.id = const Value.absent(),
@@ -3414,6 +3491,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
     this.isFlagged = const Value.absent(),
     required int sortOrder,
     required DateTime date,
+    this.syncId = const Value.absent(),
   })  : label = Value(label),
         sortOrder = Value(sortOrder),
         date = Value(date);
@@ -3425,6 +3503,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
     Expression<bool>? isFlagged,
     Expression<int>? sortOrder,
     Expression<DateTime>? date,
+    Expression<String>? syncId,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
@@ -3434,6 +3513,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
       if (isFlagged != null) 'is_flagged': isFlagged,
       if (sortOrder != null) 'sort_order': sortOrder,
       if (date != null) 'date': date,
+      if (syncId != null) 'sync_id': syncId,
     });
   }
 
@@ -3444,7 +3524,8 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
       Value<DateTime?>? doneAt,
       Value<bool>? isFlagged,
       Value<int>? sortOrder,
-      Value<DateTime>? date}) {
+      Value<DateTime>? date,
+      Value<String?>? syncId}) {
     return IntentionTasksCompanion(
       id: id ?? this.id,
       label: label ?? this.label,
@@ -3453,6 +3534,7 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
       isFlagged: isFlagged ?? this.isFlagged,
       sortOrder: sortOrder ?? this.sortOrder,
       date: date ?? this.date,
+      syncId: syncId ?? this.syncId,
     );
   }
 
@@ -3480,6 +3562,9 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
     if (date.present) {
       map['date'] = Variable<DateTime>(date.value);
     }
+    if (syncId.present) {
+      map['sync_id'] = Variable<String>(syncId.value);
+    }
     return map;
   }
 
@@ -3492,7 +3577,8 @@ class IntentionTasksCompanion extends UpdateCompanion<IntentionTask> {
           ..write('doneAt: $doneAt, ')
           ..write('isFlagged: $isFlagged, ')
           ..write('sortOrder: $sortOrder, ')
-          ..write('date: $date')
+          ..write('date: $date, ')
+          ..write('syncId: $syncId')
           ..write(')'))
         .toString();
   }
@@ -4465,6 +4551,7 @@ typedef $$UserSettingsTableCreateCompanionBuilder = UserSettingsCompanion
   Value<String> aiPersona,
   Value<int> appOpenCount,
   Value<bool> usageStatsPermissionAsked,
+  Value<bool> batteryExemptionAsked,
   Value<DateTime?> lastIntentionPromptDate,
   Value<String?> supabaseUserId,
   Value<String?> lastSyncedAt,
@@ -4481,6 +4568,7 @@ typedef $$UserSettingsTableUpdateCompanionBuilder = UserSettingsCompanion
   Value<String> aiPersona,
   Value<int> appOpenCount,
   Value<bool> usageStatsPermissionAsked,
+  Value<bool> batteryExemptionAsked,
   Value<DateTime?> lastIntentionPromptDate,
   Value<String?> supabaseUserId,
   Value<String?> lastSyncedAt,
@@ -4529,6 +4617,10 @@ class $$UserSettingsTableFilterComposer
 
   ColumnFilters<bool> get usageStatsPermissionAsked => $composableBuilder(
       column: $table.usageStatsPermissionAsked,
+      builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<bool> get batteryExemptionAsked => $composableBuilder(
+      column: $table.batteryExemptionAsked,
       builder: (column) => ColumnFilters(column));
 
   ColumnFilters<DateTime> get lastIntentionPromptDate => $composableBuilder(
@@ -4590,6 +4682,10 @@ class $$UserSettingsTableOrderingComposer
       column: $table.usageStatsPermissionAsked,
       builder: (column) => ColumnOrderings(column));
 
+  ColumnOrderings<bool> get batteryExemptionAsked => $composableBuilder(
+      column: $table.batteryExemptionAsked,
+      builder: (column) => ColumnOrderings(column));
+
   ColumnOrderings<DateTime> get lastIntentionPromptDate => $composableBuilder(
       column: $table.lastIntentionPromptDate,
       builder: (column) => ColumnOrderings(column));
@@ -4642,6 +4738,9 @@ class $$UserSettingsTableAnnotationComposer
   GeneratedColumn<bool> get usageStatsPermissionAsked => $composableBuilder(
       column: $table.usageStatsPermissionAsked, builder: (column) => column);
 
+  GeneratedColumn<bool> get batteryExemptionAsked => $composableBuilder(
+      column: $table.batteryExemptionAsked, builder: (column) => column);
+
   GeneratedColumn<DateTime> get lastIntentionPromptDate => $composableBuilder(
       column: $table.lastIntentionPromptDate, builder: (column) => column);
 
@@ -4688,6 +4787,7 @@ class $$UserSettingsTableTableManager extends RootTableManager<
             Value<String> aiPersona = const Value.absent(),
             Value<int> appOpenCount = const Value.absent(),
             Value<bool> usageStatsPermissionAsked = const Value.absent(),
+            Value<bool> batteryExemptionAsked = const Value.absent(),
             Value<DateTime?> lastIntentionPromptDate = const Value.absent(),
             Value<String?> supabaseUserId = const Value.absent(),
             Value<String?> lastSyncedAt = const Value.absent(),
@@ -4703,6 +4803,7 @@ class $$UserSettingsTableTableManager extends RootTableManager<
             aiPersona: aiPersona,
             appOpenCount: appOpenCount,
             usageStatsPermissionAsked: usageStatsPermissionAsked,
+            batteryExemptionAsked: batteryExemptionAsked,
             lastIntentionPromptDate: lastIntentionPromptDate,
             supabaseUserId: supabaseUserId,
             lastSyncedAt: lastSyncedAt,
@@ -4718,6 +4819,7 @@ class $$UserSettingsTableTableManager extends RootTableManager<
             Value<String> aiPersona = const Value.absent(),
             Value<int> appOpenCount = const Value.absent(),
             Value<bool> usageStatsPermissionAsked = const Value.absent(),
+            Value<bool> batteryExemptionAsked = const Value.absent(),
             Value<DateTime?> lastIntentionPromptDate = const Value.absent(),
             Value<String?> supabaseUserId = const Value.absent(),
             Value<String?> lastSyncedAt = const Value.absent(),
@@ -4733,6 +4835,7 @@ class $$UserSettingsTableTableManager extends RootTableManager<
             aiPersona: aiPersona,
             appOpenCount: appOpenCount,
             usageStatsPermissionAsked: usageStatsPermissionAsked,
+            batteryExemptionAsked: batteryExemptionAsked,
             lastIntentionPromptDate: lastIntentionPromptDate,
             supabaseUserId: supabaseUserId,
             lastSyncedAt: lastSyncedAt,
@@ -5064,6 +5167,7 @@ typedef $$IntentionTasksTableCreateCompanionBuilder = IntentionTasksCompanion
   Value<bool> isFlagged,
   required int sortOrder,
   required DateTime date,
+  Value<String?> syncId,
 });
 typedef $$IntentionTasksTableUpdateCompanionBuilder = IntentionTasksCompanion
     Function({
@@ -5074,6 +5178,7 @@ typedef $$IntentionTasksTableUpdateCompanionBuilder = IntentionTasksCompanion
   Value<bool> isFlagged,
   Value<int> sortOrder,
   Value<DateTime> date,
+  Value<String?> syncId,
 });
 
 class $$IntentionTasksTableFilterComposer
@@ -5105,6 +5210,9 @@ class $$IntentionTasksTableFilterComposer
 
   ColumnFilters<DateTime> get date => $composableBuilder(
       column: $table.date, builder: (column) => ColumnFilters(column));
+
+  ColumnFilters<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnFilters(column));
 }
 
 class $$IntentionTasksTableOrderingComposer
@@ -5136,6 +5244,9 @@ class $$IntentionTasksTableOrderingComposer
 
   ColumnOrderings<DateTime> get date => $composableBuilder(
       column: $table.date, builder: (column) => ColumnOrderings(column));
+
+  ColumnOrderings<String> get syncId => $composableBuilder(
+      column: $table.syncId, builder: (column) => ColumnOrderings(column));
 }
 
 class $$IntentionTasksTableAnnotationComposer
@@ -5167,6 +5278,9 @@ class $$IntentionTasksTableAnnotationComposer
 
   GeneratedColumn<DateTime> get date =>
       $composableBuilder(column: $table.date, builder: (column) => column);
+
+  GeneratedColumn<String> get syncId =>
+      $composableBuilder(column: $table.syncId, builder: (column) => column);
 }
 
 class $$IntentionTasksTableTableManager extends RootTableManager<
@@ -5203,6 +5317,7 @@ class $$IntentionTasksTableTableManager extends RootTableManager<
             Value<bool> isFlagged = const Value.absent(),
             Value<int> sortOrder = const Value.absent(),
             Value<DateTime> date = const Value.absent(),
+            Value<String?> syncId = const Value.absent(),
           }) =>
               IntentionTasksCompanion(
             id: id,
@@ -5212,6 +5327,7 @@ class $$IntentionTasksTableTableManager extends RootTableManager<
             isFlagged: isFlagged,
             sortOrder: sortOrder,
             date: date,
+            syncId: syncId,
           ),
           createCompanionCallback: ({
             Value<int> id = const Value.absent(),
@@ -5221,6 +5337,7 @@ class $$IntentionTasksTableTableManager extends RootTableManager<
             Value<bool> isFlagged = const Value.absent(),
             required int sortOrder,
             required DateTime date,
+            Value<String?> syncId = const Value.absent(),
           }) =>
               IntentionTasksCompanion.insert(
             id: id,
@@ -5230,6 +5347,7 @@ class $$IntentionTasksTableTableManager extends RootTableManager<
             isFlagged: isFlagged,
             sortOrder: sortOrder,
             date: date,
+            syncId: syncId,
           ),
           withReferenceMapper: (p0) => p0
               .map((e) => (e.readTable(table), BaseReferences(db, table, e)))

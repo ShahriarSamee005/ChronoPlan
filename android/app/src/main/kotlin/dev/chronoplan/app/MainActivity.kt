@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ApplicationInfo
 import android.net.Uri
 import android.os.Build
+import android.os.PowerManager
 import android.os.Process
 import android.provider.Settings
 import io.flutter.embedding.android.FlutterActivity
@@ -19,6 +20,8 @@ class MainActivity : FlutterActivity() {
     private val usageStatsChannel  = "com.example.chronoplan/usage_stats"
     private val notificationPermissionChannel =
         "com.example.chronoplan/notification_permission"
+    private val batteryOptimizationChannel =
+        "com.example.chronoplan/battery_optimization"
 
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
@@ -66,6 +69,19 @@ class MainActivity : FlutterActivity() {
                     else -> result.notImplemented()
                 }
             }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, batteryOptimizationChannel)
+            .setMethodCallHandler { call, result ->
+                when (call.method) {
+                    "isIgnoringBatteryOptimizations" ->
+                        result.success(isIgnoringBatteryOptimizations())
+                    "requestIgnoreBatteryOptimizations" -> {
+                        requestIgnoreBatteryOptimizations()
+                        result.success(null)
+                    }
+                    else -> result.notImplemented()
+                }
+            }
     }
 
     /**
@@ -90,6 +106,39 @@ class MainActivity : FlutterActivity() {
                 .setData(Uri.fromParts("package", packageName, null))
         }
         startActivity(intent)
+    }
+
+    /**
+     * Whether the app currently sits on the OS battery-optimization allowlist
+     * (i.e. is exempt from Doze). PowerManager.isIgnoringBatteryOptimizations
+     * is API 23+ and minSdk is >= 23, so no version guard is needed.
+     */
+    private fun isIgnoringBatteryOptimizations(): Boolean {
+        val pm = getSystemService(PowerManager::class.java) ?: return false
+        return pm.isIgnoringBatteryOptimizations(packageName)
+    }
+
+    /**
+     * Fires the system "allow this app to ignore battery optimizations" dialog.
+     *
+     * ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS shows a one-tap allow/deny
+     * dialog, but some OEM ROMs strip it. On failure, fall back to the general
+     * battery-optimization settings list (ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS);
+     * if that also throws, return quietly rather than crash the sleep toggle.
+     */
+    private fun requestIgnoreBatteryOptimizations() {
+        try {
+            startActivity(
+                Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS)
+                    .setData(Uri.parse("package:$packageName"))
+            )
+        } catch (_: Exception) {
+            try {
+                startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
+            } catch (_: Exception) {
+                // No battery-optimization UI on this ROM — give up silently.
+            }
+        }
     }
 
     /**

@@ -1,6 +1,8 @@
 import 'dart:async';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:timezone/data/latest.dart' as tz;
@@ -107,6 +109,40 @@ class NotificationService {
     } catch (_) {
       return false;
     }
+  }
+
+  // ── Battery optimization exemption ────────────────────────────────────────
+  //
+  // Bridges to MainActivity.kt's com.example.chronoplan/battery_optimization
+  // channel. Mirrors the degrade-safe contract of UsagePermissionChannel: the
+  // channel is absent off Android and in headless tests, so a bool query
+  // returns false and a void request is a no-op rather than throwing.
+
+  static const _batteryChannel =
+      MethodChannel('com.example.chronoplan/battery_optimization');
+
+  /// Whether the app is on the OS battery-optimization allowlist (Doze exempt).
+  /// Returns false on any PlatformException and off Android — degrade safe.
+  Future<bool> isIgnoringBatteryOptimizations() async {
+    if (!Platform.isAndroid) return false;
+    try {
+      return await _batteryChannel
+              .invokeMethod<bool>('isIgnoringBatteryOptimizations') ??
+          false;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  /// Fires the system "ignore battery optimizations" dialog (falling back to
+  /// the general battery-optimization settings list on OEMs without it, see
+  /// MainActivity). Swallows exceptions; no-op off Android.
+  Future<void> requestIgnoreBatteryOptimizations() async {
+    if (!Platform.isAndroid) return;
+    try {
+      await _batteryChannel
+          .invokeMethod<void>('requestIgnoreBatteryOptimizations');
+    } catch (_) {}
   }
 
   // ── Scheduling ────────────────────────────────────────────────────────────
